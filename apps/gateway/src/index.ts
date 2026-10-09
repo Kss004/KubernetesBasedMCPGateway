@@ -5,10 +5,13 @@ import http from 'node:http';
 import { loadConfig } from './config.js';
 import { createPool, migrate } from './db.js';
 import { listServers, createServer, patchServer, deleteServer } from './servers.js';
+import { UpstreamPool } from './pool.js';
 
 const cfg = loadConfig();
 const pool = createPool(cfg.pg);
 await migrate(pool);
+const upstreams = new UpstreamPool(pool, cfg.credKey);
+upstreams.start();
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const readJson = (req: http.IncomingMessage, limit = 64 << 10): Promise<unknown> =>
@@ -60,7 +63,6 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/servers')) {
-      // Bootstrap admin auth: static token from Secret. P4 login replaces it.
       const h = req.headers.authorization ?? '';
       if (ADMIN_TOKEN === '' || h !== `Bearer ${ADMIN_TOKEN}`) {
         send(res, 401, { error: 'unauthorized' });
@@ -97,6 +99,15 @@ const server = http.createServer(async (req, res) => {
         if (status === 500) console.error('admin api', (e as Error).message);
         send(res, status, { error: (e as Error).message });
       }
+      return;
+    }
+    if (req.url === '/api/upstreams' && req.method === 'GET') {
+      const h = req.headers.authorization ?? '';
+      if (ADMIN_TOKEN === '' || h !== `Bearer ${ADMIN_TOKEN}`) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      send(res, 200, { upstreams: upstreams.getStates() });
       return;
     }
     if ((req.url ?? '').startsWith('/.well-known/')) {
