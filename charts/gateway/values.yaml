@@ -1,0 +1,9 @@
+appHost: app.localhost
+
+images:
+  postgres: "postgres:17"
+  gateway: "gateway"
+gatewayTag: "0.1.0"
+
+storage:
+  postgres: 5Gi
