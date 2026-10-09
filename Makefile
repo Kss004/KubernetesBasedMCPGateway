@@ -18,5 +18,5 @@ secrets: ## Create out-of-band secrets (LLM key etc.) via kubectl (T6.1 fills in
 seed: ## Register woo-mcp via admin API using kubectl-read token (T3.6 fills in)
 	@echo "TODO(T3.6): not wired yet"
 
-test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1 fills in)
-	@echo "TODO(T1.1): not wired yet"
+test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1)
+	bash scripts/test-netpol.sh
