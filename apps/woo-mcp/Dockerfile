@@ -2,7 +2,7 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY apps/woo-mcp/package.json apps/woo-mcp/
-RUN npm install --workspace apps/woo-mcp --no-audit --no-fund
+RUN npm install --no-audit --no-fund
 COPY tsconfig.base.json ./
 COPY apps/woo-mcp/ apps/woo-mcp/
 RUN npm run build --workspace apps/woo-mcp

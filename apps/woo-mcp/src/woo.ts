@@ -17,7 +17,15 @@ export interface WooConfig {
 }
 
 const phpEncode = (s: string): string =>
-  encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+  encodeURIComponent(s)
+    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+    .replace(/%7E/g, '~');
+
+// WooCommerce double-encodes signed pairs: normalize_parameters() encodes
+// keys/values, then join_with_equals_sign() encodes the joined "k=v" AGAIN.
+// Values without special chars (e.g. dates) are unaffected, which is why this
+// only bites on ISO datetimes. Replicates wc-rest-functions.php exactly.
+const signedPair = (k: string, v: string): string => phpEncode(`${phpEncode(k)}=${phpEncode(v)}`);
 
 export function signRequest(
   method: string,
@@ -34,7 +42,7 @@ export function signRequest(
     oauth_timestamp: String(Math.floor(Date.now() / 1000)),
   };
   const sorted = Object.keys(params).sort(); // byte order, like uksort(strcmp)
-  const paramString = sorted.map((k) => `${phpEncode(k)}%3D${phpEncode(params[k])}`).join('%26');
+  const paramString = sorted.map((k) => signedPair(k, params[k])).join('%26');
   const home = (process.env.WP_HOME_URL ?? 'http://shop.localhost').replace(/\/$/, '');
   const baseString = `${method.toUpperCase()}&${phpEncode(home + path)}&${paramString}`;
   const sig = createHmac('sha256', secret + '&')
