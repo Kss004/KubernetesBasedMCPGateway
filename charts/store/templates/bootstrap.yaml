@@ -1,0 +1,201 @@
+# T1.4 bootstrap: wordpress:cli Job, idempotent (safe to re-run).
+# Writes the WooCommerce REST key/secret to a Secret via the K8s API with a
+# least-privilege Role (only get/create/delete the one Secret). Re-run with:
+#   kubectl -n <ns> delete job <release>-bootstrap --ignore-not-found
+#   helm upgrade <release> charts/store -n <ns>
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+rules:
+  # NOTE: the API server ignores resourceNames on create (verified: real POST
+  # is denied while `can-i create secret/<name>` says yes). So create is granted
+  # namespace-wide — blast radius is still just urumi-store — while get/delete
+  # stay pinned to the one Secret.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["{{ .Release.Name }}-woo-rest"]
+    verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-bootstrap
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-bootstrap
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-bootstrap-scripts
+data:
+  settings.php: |
+    <?php
+    // Store, payment and shipping bootstrap. Re-runnable: every step is set-if-needed.
+    update_option('permalink_structure', '/%postname%/');
+    update_option('woocommerce_default_country', 'US:CA');
+    update_option('woocommerce_currency', 'USD');
+    $cod = get_option('woocommerce_cod_settings', array());
+    $cod['enabled'] = 'yes';
+    $cod['title'] = 'Cash on delivery';
+    update_option('woocommerce_cod_settings', $cod);
+    // Shipping zone covering the US test address with a flat-rate method.
+    // Without a method, checkout fails with "no shipping options" (DoD step 1).
+    $found = false;
+    foreach (WC_Shipping_Zones::get_zones() as $zdata) {
+      $z = WC_Shipping_Zones::get_zone($zdata['zone_id']);
+      if ($z && count($z->get_shipping_methods()) > 0) { $found = true; break; }
+    }
+    if (!$found) {
+      $zone = new WC_Shipping_Zone();
+      $zone->set_zone_name('United States');
+      $zone->add_location('US', 'country');
+      $zone->save();
+      $zone->add_shipping_method('flat_rate');
+      echo "shipping zone created\n";
+    } else {
+      echo "shipping zone exists\n";
+    }
+    flush_rewrite_rules();
+    echo "settings done\n";
+  keys.php: |
+    <?php
+    // Creates the WooCommerce REST key pair once and stores it in a Secret.
+    // Never prints key material: only "secret exists" / "secret created".
+    $release = getenv('RELEASE_NAME');
+    $ns = trim(@file_get_contents('/var/run/secrets/kubernetes.io/serviceaccount/namespace'));
+    $token = trim(@file_get_contents('/var/run/secrets/kubernetes.io/serviceaccount/token'));
+    $col = 'https://kubernetes.default/api/v1/namespaces/' . $ns . '/secrets';
+    $item = $col . '/' . $release . '-woo-rest';
+    $base = array(
+      'headers' => array('Authorization' => 'Bearer ' . $token, 'Content-Type' => 'application/json'),
+      'sslverify' => true,
+      'sslcertificates' => '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
+      'timeout' => 10,
+    );
+    $get = wp_remote_get($item, $base);
+    if (!is_wp_error($get) && wp_remote_retrieve_response_code($get) === 200) {
+      $body = json_decode(wp_remote_retrieve_body($get), true);
+      if (!empty($body['data']['key']) && !empty($body['data']['secret'])) {
+        echo "secret exists\n";
+        exit(0);
+      }
+      wp_remote_request($item, array_merge($base, array('method' => 'DELETE')));
+    }
+    $user = get_user_by('login', 'admin');
+    global $wpdb;
+    $table = $wpdb->prefix . 'woocommerce_api_keys';
+    $row = $wpdb->get_row($wpdb->prepare("SELECT key_id FROM $table WHERE user_id = %d AND permissions = %s", $user->ID, 'read_write'));
+    if ($row) {
+      $wpdb->delete($table, array('key_id' => $row->key_id));
+    }
+    $ck = 'ck_' . wc_rand_hash();
+    $cs = 'cs_' . wc_rand_hash();
+    $wpdb->insert($table, array(
+      'user_id' => $user->ID,
+      'description' => 'woo-mcp',
+      'permissions' => 'read_write',
+      'consumer_key' => wc_api_hash($ck),
+      'consumer_secret' => $cs,
+      'truncated_key' => substr($ck, -7),
+    ));
+    $payload = json_encode(array(
+      'apiVersion' => 'v1', 'kind' => 'Secret',
+      'metadata' => array('name' => $release . '-woo-rest'),
+      'type' => 'Opaque',
+      'stringData' => array('key' => $ck, 'secret' => $cs),
+    ));
+    $post = wp_remote_post($col, array_merge($base, array('body' => $payload)));
+    if (is_wp_error($post) || wp_remote_retrieve_response_code($post) >= 300) {
+      echo "secret create failed: ";
+      if (is_wp_error($post)) {
+        echo $post->get_error_message() . "\n";
+      } else {
+        echo wp_remote_retrieve_response_code($post) . " " . wp_remote_retrieve_body($post) . "\n";
+      }
+      exit(1);
+    }
+    echo "secret created\n";
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-bootstrap
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: store-bootstrap
+    spec:
+      serviceAccountName: {{ .Release.Name }}-bootstrap
+      automountServiceAccountToken: true # exception: this Job drives the K8s API (least-privilege Role)
+      restartPolicy: Never
+      # The wordpress:cli image runs as uid 82, but the docroot on the shared
+      # PVC is owned by uid 33 (written by the wordpress image). The bootstrap
+      # is a one-shot admin task, so it runs as root; the web runtime is untouched.
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: bootstrap
+          image: wordpress:cli-2.12.0
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              cd /var/www/html
+              WP="wp --allow-root"
+              if ! $WP core is-installed; then
+                $WP core install --url="http://{{ .Values.storeHost }}" --title="Test Store" \
+                  --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" \
+                  --admin_email=admin@example.com --skip-email
+              fi
+              # Pin the exact WooCommerce version (docs/versions.md), never latest.
+              INSTALLED=$($WP plugin get woocommerce --field=version 2>/dev/null || echo none)
+              if [ "$INSTALLED" != "{{ .Values.woocommerceVersion }}" ]; then
+                $WP plugin install --force "https://downloads.wordpress.org/plugin/woocommerce.{{ .Values.woocommerceVersion }}.zip"
+              fi
+              $WP plugin activate woocommerce
+              $WP eval-file /scripts/settings.php
+              RELEASE_NAME="{{ .Release.Name }}" $WP eval-file /scripts/keys.php
+          env:
+            - name: WP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-wp-admin, key: password }
+            # wp-config.php reads these via getenv_docker() at runtime, so the
+            # cli pod needs the same DB env as the wordpress pod.
+            - name: WORDPRESS_DB_HOST
+              value: {{ .Release.Name }}-mariadb:3306
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+            - name: WORDPRESS_DB_USER
+              value: wordpress
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-db, key: password }
+          volumeMounts:
+            - name: docroot
+              mountPath: /var/www/html
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: docroot
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-wordpress-data
+        - name: scripts
+          configMap:
+            name: {{ .Release.Name }}-bootstrap-scripts
