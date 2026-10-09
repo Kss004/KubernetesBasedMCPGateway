@@ -15,8 +15,8 @@ reset: ## Delete the kind cluster for a clean run (D19; dangerous: ask first)
 secrets: ## Create out-of-band secrets (LLM key etc.) via kubectl (T6.1 fills in)
 	@echo "TODO(T6.1): not wired yet"
 
-seed: ## Register woo-mcp via admin API using kubectl-read token (T3.6 fills in)
-	@echo "TODO(T3.6): not wired yet"
+seed: ## Register woo-mcp via admin API using kubectl-read token (T3.6)
+	bash scripts/seed.sh
 
 test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1)
 	bash scripts/test-netpol.sh
