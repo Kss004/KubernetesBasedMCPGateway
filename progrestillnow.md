@@ -40,10 +40,10 @@ There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
 
 | Phase | State |
 |---|---|
-| P0 Environment + scaffold + Makefile skeleton | In progress (T0.1 done → `docs/notes/T0.1.md`) |
-| P1 Store on K8s | Not started |
-| P2 Woo MCP server | Not started |
-| P3 Gateway core (+ mock-mcp first) | Not started |
+| P0 Environment + scaffold + Makefile skeleton | Done (T0.1→T0.5, notes docs/notes/T0.1.md) |
+| P1 Store on K8s | Done (C1 met: checkout order 12, persistence, reset; T1.6) |
+| P2 Woo MCP server | Done (5 tools live, OAuth client, netpol pair; docs/woo-store-access.md) |
+| P3 Gateway core (+ mock-mcp first) | Partial: T3.0–T3.3 + T3.6 done. NEXT: human writes T3.4/T3.5 (HANDOFF.md) |
 | P4 Users, keys, roles, audit | Not started |
 | P5 Dashboard | Not started |
 | P6 Chat agent | Not started |
@@ -372,9 +372,13 @@ Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretc
 
 ## 12. In flight
 
-T0.1 done: `windows-coding-setup.md` written from actual runs; `.wslconfig` is 24GB/12/8GB (not spec 20GB/8) — human confirms keep vs change; `make` still missing (human runs `sudo apt install -y make`). Brief moved to `docs/Urumi-Round1-Brief.docx`.
+P0–P2 done and committed. P3 partial: mock-mcp live, gateway scaffold +
+registry + pool + `make seed` done and verified (woo+mock Connected,
+scale-to-0 → Unreachable). `/mcp` returns 501.
 
-**Next action is T0.2**: `.gitignore` + `.gitattributes` (LF) + renormalize, before any other scaffold. Then switch to Build for T0.2 with teacher after.
+**Next action: human writes T3.4 aggregator + T3.5 router** (contracts in
+`apps/gateway/HANDOFF.md`; Agents.md §3 — agents review only). Suggested order:
+T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
 
 ---
 
