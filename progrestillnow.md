@@ -21,6 +21,10 @@ Items marked **REVISED** changed after the first draft. Items marked **NEW** wer
 | Git | Private GitHub repo created on day 1 (needed for GHCR and backup) |
 | Bring-up | One command: `make up` (D19) |
 | Demo users | A = admin, B = member (D23) |
+| Repo | `github.com/Kss004/KubernetesBasedMCPGateway`, private, remote configured |
+| Availability | All 14 days Oct 9-22 are full working days |
+| Working mode | AI-native coding, user learns alongside: context and reasoning are part of every task's output, not an afterthought |
+| Working location | All development happens on the Windows PC under WSL2. The MacBook Air session that wrote this file is finished |
 
 ---
 
@@ -357,8 +361,10 @@ Write each section's commands only after running them on the PC. Anything not ye
 | Q2 | Repo name | Pick on day 1 when creating the GitHub repo |
 | Q10 | Mac mini RAM: 16 or 24GB? | Deferred to Phase 9, not blocking |
 | Q11 | Rent a cheap VPS for a few days to get a real amd64 run? | Decide by Oct 16. If yes, rent Oct 20-22 only |
-| Q13 | Any days between Oct 9 and Oct 22 when you cannot work a full day? | Unanswered. The schedule assumes full days; P1 and P4 have no slack |
-| Q14 | Repo name, for the GitHub repo created on day 1 | Needed on Oct 9, blocks T0.2 |
+| Q13 | Any days between Oct 9 and Oct 22 when you cannot work a full day? | **Answered: no, all 14 days are full days.** Schedule in section 6 holds; P1 and P4 zero-slack phases are viable |
+| Q14 | Repo name, for the GitHub repo created on day 1 | **Answered: `KubernetesBasedMCPGateway`** (private, `Kss004/KubernetesBasedMCPGateway`) |
+
+No open questions remain.
 
 Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretch swap (D12), Q12 Docker Desktop (section 3).
 
@@ -366,7 +372,11 @@ Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretc
 
 ## 12. In flight
 
-Nothing started. Next action: T0.1 on the PC, following `windows-coding-setup.md`.
+Git repo created and the initial commit pushed. Nothing else started.
+
+**Next action is T0.1 on the PC**, following `windows-coding-setup.md` (which does not exist yet, so T0.1 writes it). T0.1 and T0.2 are effectively done in spirit: the repo exists and the remote is configured, but `.gitignore` and `.gitattributes` are still missing, which matters a lot on Windows (T0.2).
+
+Start the next session by reading sections 3, 6 and 7 of this file, then run T0.1.
 
 ---
 
@@ -376,6 +386,8 @@ Nothing started. Next action: T0.1 on the PC, following `windows-coding-setup.md
 - Run every verify command. No evidence, not done.
 - After each task, add one line: what you built and the one non-obvious reason. You will be asked in Round 2.
 - Ponytail rule: no ORM, no UI framework, no crypto library, no retry library, no LLM SDK, no DI container. Plain `fetch`, plain SQL, Node `crypto`, `node --test`. Deliberate shortcuts get a `// ponytail:` comment naming the ceiling and the upgrade path.
+
+**Learning mode.** The human is doing AI-native coding and learning alongside, not accepting generated code blind. So for every task: state the context and the constraints before writing code, name the decision and the rejected alternatives as you make it, and say plainly what is uncertain or unverified. A task is not finished until the human could explain that task's design in a live walkthrough. Prefer one small understood thing over a large opaque one.
 
 ---
 
