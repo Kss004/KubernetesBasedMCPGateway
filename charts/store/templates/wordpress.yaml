@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-wordpress-data
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.storage.wordpress }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-wordpress
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: wordpress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      automountServiceAccountToken: false
+      # No runAsNonRoot: the official wordpress image serves on :80 as root.
+      containers:
+        - name: wordpress
+          image: {{ .Values.images.wordpress }}
+          ports:
+            - containerPort: 80
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: {{ .Release.Name }}-mariadb:3306
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+            - name: WORDPRESS_DB_USER
+              value: wordpress
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-db, key: password }
+            # Site URL via config, not the database (D21): survives domain changes.
+            - name: WORDPRESS_CONFIG_EXTRA
+              value: |
+                define('WP_HOME', 'http://{{ .Values.storeHost }}');
+                define('WP_SITEURL', 'http://{{ .Values.storeHost }}');
+          volumeMounts:
+            - name: docroot
+              mountPath: /var/www/html
+          resources: {{ .Values.resources.wordpress | toJson | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+      volumes:
+        - name: docroot
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-wordpress-data
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-wordpress
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: {{ .Values.storeHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-wordpress
+                port: { number: 80 }
