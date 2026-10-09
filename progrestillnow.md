@@ -30,7 +30,7 @@ Items marked **REVISED** changed after the first draft. Items marked **NEW** wer
 
 ## 1. Current state
 
-Repo contains the assignment `.docx` and this file. No cluster, no source code, no git repo yet. Nothing is built. `windows-coding-setup.md` is referenced by T0.1 and section 3 but **has not been written yet** — T0.1 creates it.
+Repo contains the assignment `.docx` (untracked, see `docs/` after T0.1), `Agents.md`, `README.md` and this file. Git repo + remote exist. No cluster, no source code. Nothing is built. `windows-coding-setup.md` now exists (written by T0.1, see `docs/notes/T0.1.md`).
 
 There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
 
@@ -40,7 +40,7 @@ There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
 
 | Phase | State |
 |---|---|
-| P0 Environment + scaffold + Makefile skeleton | Not started |
+| P0 Environment + scaffold + Makefile skeleton | In progress (T0.1 done → `docs/notes/T0.1.md`) |
 | P1 Store on K8s | Not started |
 | P2 Woo MCP server | Not started |
 | P3 Gateway core (+ mock-mcp first) | Not started |
@@ -67,7 +67,7 @@ The earlier draft had the Mac mini running everything. Rejected: a remote kind c
 ### PC setup (WSL2)
 
 - Full steps and troubleshooting: `windows-coding-setup.md`.
-- WSL2 + Ubuntu 24.04. Repo in `~/urumi`, **not** `/mnt/c`.
+- WSL2 + Ubuntu 24.04. Repo in the repo root on the WSL filesystem, **not** `/mnt/c`.
 - `%UserProfile%\.wslconfig`: `memory=20GB`, `processors=8`, `swap=8GB`.
 - Docker Desktop with the WSL2 backend. Do not also install native Docker Engine in WSL2.
 - Inside WSL: kind, kubectl, helm, node 24, git, make.
@@ -372,11 +372,9 @@ Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretc
 
 ## 12. In flight
 
-Git repo created and the initial commit pushed. Nothing else started.
+T0.1 done: `windows-coding-setup.md` written from actual runs; `.wslconfig` is 24GB/12/8GB (not spec 20GB/8) — human confirms keep vs change; `make` still missing (human runs `sudo apt install -y make`). Brief moved to `docs/Urumi-Round1-Brief.docx`.
 
-**Next action is T0.1 on the PC**, following `windows-coding-setup.md` (which does not exist yet, so T0.1 writes it). T0.1 and T0.2 are effectively done in spirit: the repo exists and the remote is configured, but `.gitignore` and `.gitattributes` are still missing, which matters a lot on Windows (T0.2).
-
-Start the next session by reading sections 3, 6 and 7 of this file, then run T0.1.
+**Next action is T0.2**: `.gitignore` + `.gitattributes` (LF) + renormalize, before any other scaffold. Then switch to Build for T0.2 with teacher after.
 
 ---
 
