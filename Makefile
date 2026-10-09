@@ -9,8 +9,8 @@ up: ## Create cluster, install ingress, build+load images, secrets, helm install
 down: ## helm uninstall, keep data (later tasks fill in)
 	@echo "TODO(P1): not wired yet"
 
-reset: ## Delete cluster/namespaces+PVCs for a clean run (D19/D20; dangerous: ask first)
-	@echo "TODO(T1.1): not wired yet"
+reset: ## Delete the kind cluster for a clean run (D19; dangerous: ask first)
+	kind delete cluster --name urumi
 
 secrets: ## Create out-of-band secrets (LLM key etc.) via kubectl (T6.1 fills in)
 	@echo "TODO(T6.1): not wired yet"

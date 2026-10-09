@@ -159,6 +159,13 @@ spec:
               set -e
               cd /var/www/html
               WP="wp --allow-root"
+              # Fresh PVCs start empty: the wordpress container populates the
+              # docroot on first boot, so wait for it instead of racing it.
+              for i in $(seq 1 60); do
+                [ -f wp-includes/version.php ] && break
+                sleep 5
+              done
+              [ -f wp-includes/version.php ] || { echo "docroot never populated"; exit 1; }
               if ! $WP core is-installed; then
                 $WP core install --url="http://{{ .Values.storeHost }}" --title="Test Store" \
                   --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" \
