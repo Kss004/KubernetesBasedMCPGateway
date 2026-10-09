@@ -1,0 +1,5 @@
+apiVersion: v2
+name: upstreams
+description: Test upstream MCP servers (mock-mcp now, everything in T7.1)
+type: application
+version: 0.1.0

@@ -1,0 +1,71 @@
+# mock-mcp in urumi-upstreams (T3.0): ClusterIP, no Ingress. Ingress
+# default-deny; only the urumi-gateway namespace will reach it (P3).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-mock-mcp
+spec:
+  ports:
+    - port: 3000
+  selector:
+    app: mock-mcp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-mock-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-mcp
+  template:
+    metadata:
+      labels:
+        app: mock-mcp
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mock-mcp
+          image: "{{ .Values.mockMcp.image }}:{{ .Values.mockMcp.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mock-mcp-ingress
+spec:
+  podSelector:
+    matchLabels: { app: mock-mcp }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: urumi-gateway
+      ports: [{ port: 3000 }]
