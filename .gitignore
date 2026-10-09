@@ -1,0 +1,30 @@
+# Node / TS
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# Env and secrets — never commit
+.env*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# kind / kube / helm local artefacts
+kubeconfig*
+*.kubeconfig
+kind-*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Byte-compiled python (bootstrap scripts may add later)
+__pycache__/
