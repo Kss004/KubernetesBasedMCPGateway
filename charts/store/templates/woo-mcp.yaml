@@ -1,0 +1,63 @@
+# woo-mcp lives beside the store (D18): it mounts the REST Secret that cannot
+# cross namespaces. ClusterIP only, no Ingress; reachable solely from the
+# urumi-gateway namespace (see networkpolicy.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-woo-mcp
+spec:
+  ports:
+    - port: 3000
+  selector:
+    app: woo-mcp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-woo-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: woo-mcp
+  template:
+    metadata:
+      labels:
+        app: woo-mcp
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: woo-mcp
+          image: "{{ .Values.wooMcp.image }}:{{ .Values.wooMcp.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: WOO_MCP_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-woo-inbound, key: token }
+            - name: REST_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-woo-rest, key: key }
+            - name: REST_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-woo-rest, key: secret }
+            - name: WP_BASE
+              value: http://{{ .Release.Name }}-wordpress
+            - name: WP_HOME_URL
+              value: http://{{ .Values.storeHost }}
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10

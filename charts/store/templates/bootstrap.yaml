@@ -1,8 +1,9 @@
 # T1.4 bootstrap: wordpress:cli Job, idempotent (safe to re-run).
 # Writes the WooCommerce REST key/secret to a Secret via the K8s API with a
-# least-privilege Role (only get/create/delete the one Secret). Re-run with:
-#   kubectl -n <ns> delete job <release>-bootstrap --ignore-not-found
-#   helm upgrade <release> charts/store -n <ns>
+# least-privilege Role (only get/delete the one Secret + bare create).
+# A post-install/post-upgrade hook (not a plain Job): Job pod templates are
+# immutable, so a plain Job breaks every later helm upgrade. before-hook-
+# creation replaces the previous run; successful pods are kept for logs.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -135,6 +136,10 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Release.Name }}-bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation
 spec:
   backoffLimit: 3
   template:

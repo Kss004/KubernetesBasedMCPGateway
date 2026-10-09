@@ -49,3 +49,20 @@ spec:
         - podSelector:
             matchLabels: { app: store-bootstrap }
       ports: [{ port: 3306 }]
+---
+# woo-mcp accepts ingress only from the urumi-gateway namespace (D18),
+# selected by its automatic kubernetes.io/metadata.name label.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: woo-mcp-ingress
+spec:
+  podSelector:
+    matchLabels: { app: woo-mcp }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: urumi-gateway
+      ports: [{ port: 3000 }]
