@@ -393,7 +393,7 @@ T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
 
 ---
 
-## 14. Verification notes (as of 2026-10-09)
+## 14. Verification notes (as of 2026-10-10)
 
 **Verified**
 
@@ -402,17 +402,19 @@ T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
 3. Gemini's `FunctionDeclaration.name` permits dots (letters, digits, `_`, `.`, `:`, `-`, up to 128 chars). `__` is justified by client compatibility alone.
 4. `naming.ts` with `namespaceTool` exists only on SDK `main` (v2.0.0-alpha.0), as example code and not an exported API. Do not present it as an SDK standard.
 5. The SDK negotiates spec revision 2026-07-28 only via `server/discover`; the legacy `initialize` handshake offers only older versions.
-
 6. **Gemini's OpenAI-compatible endpoint supports function calling.** Confirmed in the Gemini API docs: `POST https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, `Authorization: Bearer`, `tools` with `type: "function"` and `tool_choice` accepted, standard `choices[0].message` response. This is what makes D10 possible and keeps the LLM loop SDK-free.
+7. **T1.1 result (kind v0.33.0, 2026-10-09): policies ARE enforced on stock kindnet** — baseline OK/OK, then allowed OK / denied BLOCKED. No Calico needed; the T0.4 Calico item is closed.
+8. **WooCommerce 11.2.1 over plain HTTP: Basic AND query-string ck/cs both 401** (verified live). Only OAuth 1.0a one-legged works. Plus the double-encoding quirk: `join_with_equals_sign()` re-encodes the joined `k=v`, so ISO datetimes fail while plain dates pass. `woo.ts:signedPair` replicates it; proven by real `list_orders(after=...)` returning order 12.
+9. **SDK 1.32.1 speaks spec 2025-11-25, not 2026-07-28** (`npm view` + types.js; 2026-07-28 is v2-only). Staying on 1.x per decision; zod 4.6.5 satisfies its `^3.25 || ^4.0` peer range.
+10. **`helm.sh/resource-policy: keep` verified with Helm v4.3.0** (T1.5): PVCs + Secrets survived `helm uninstall`, reinstall reused the DB password, product survived. `make reset` (`kind delete cluster`) verified to wipe everything.
+11. **Upstream credential path verified live** (T2.4/T3.3): static bearer via `requestInit.headers.Authorization` works against our servers; `requestInit` exists on the 1.x client transport. Health loop flips Connected→Unreachable on scale-to-0 (~50s stock, ~15s with 10s grace) and back.
+12. **K8s RBAC: `resourceNames` is ignored on `create`** — real POST 403s while `kubectl auth can-i` says yes. Role grants bare `create` (namespace-bounded) + name-scoped get/delete.
 
 **Not yet verified (check before relying on them)**
 
-- WooCommerce accepts Basic auth with the REST key and secret over plain HTTP inside the cluster (T2.2).
-- Gemini's and Ollama's OpenAI-compatible endpoints both return tool calls in the shape the loop expects (T6.1).
-- `helm.sh/resource-policy: keep` behaves as described on `helm uninstall` with your Helm version (T1.5).
-- Claude Code and MCP Inspector handle the 401 and `/.well-known` 404 behaviour as described (T3.7). Related and already checked: the SDK throws `UnauthorizedError` from `connect()` when a server requires auth and no `authProvider` was supplied, so the upstream credential path is `requestInit.headers` or a custom `authProvider`, not a native bearer field.
+- Gemini's and Ollama's OpenAI-compatible endpoints both return tool calls in the shape the loop expects (T6.1). Early key/model smoke test due before Oct 14 (R4).
+- Claude Code and MCP Inspector handle the 401 and `/.well-known` 404 behaviour as described (T3.7). Gateway already returns clean 401 + JSON 404; client behaviour still to prove.
 - Whether Ollama's OpenAI-compatible endpoint returns tool calls in the same shape as Gemini's (T6.1).
-- The Calico release and install path, only if T1.1 shows policies are not enforced (T0.4).
 
 ---
 
