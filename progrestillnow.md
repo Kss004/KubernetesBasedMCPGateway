@@ -409,6 +409,7 @@ T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
 10. **`helm.sh/resource-policy: keep` verified with Helm v4.3.0** (T1.5): PVCs + Secrets survived `helm uninstall`, reinstall reused the DB password, product survived. `make reset` (`kind delete cluster`) verified to wipe everything.
 11. **Upstream credential path verified live** (T2.4/T3.3): static bearer via `requestInit.headers.Authorization` works against our servers; `requestInit` exists on the 1.x client transport. Health loop flips Connected→Unreachable on scale-to-0 (~50s stock, ~15s with 10s grace) and back.
 12. **K8s RBAC: `resourceNames` is ignored on `create`** — real POST 403s while `kubectl auth can-i` says yes. Role grants bare `create` (namespace-bounded) + name-scoped get/delete.
+13. **Mount PVCs ON the image's VOLUME path, never its parent (2026-10-13).** The postgres chart mounted at `/var/lib/postgresql` while the image declares `VOLUME .../data` → double mount, postgres wrote to ephemeral storage, first container restart wiped the gateway DB (initdb ran fresh). Fix: mount at `/var/lib/postgresql/data`. MariaDB/WP were correct (single mounts). Verify with `/proc/mounts`, not assumptions.
 
 **Not yet verified (check before relying on them)**
 

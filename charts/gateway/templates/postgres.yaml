@@ -53,8 +53,13 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-pg, key: password }
           volumeMounts:
+            # Mount AT PGDATA, not its parent: the stock image declares
+            # VOLUME /var/lib/postgresql/data, and a parent mount gets
+            # shadowed by an ephemeral auto-mount there (data survived in
+            # testing only until the first container restart, then initdb
+            # ran fresh — found 2026-10-13, all gateway rows lost).
             - name: data
-              mountPath: /var/lib/postgresql
+              mountPath: /var/lib/postgresql/data
           resources:
             requests: { cpu: 250m, memory: 256Mi }
             limits: { cpu: 500m, memory: 512Mi }
