@@ -3,7 +3,7 @@ appHost: app.localhost
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.1.3"
+gatewayTag: "0.1.4"
 
 storage:
   postgres: 5Gi

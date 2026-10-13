@@ -34,7 +34,7 @@ export function createPool(pg: {
   password: string;
   database: string;
 }): Pool {
-  return new Pool({
+  const pool = new Pool({
     host: pg.host,
     port: pg.port,
     user: pg.user,
@@ -42,6 +42,11 @@ export function createPool(pg: {
     database: pg.database,
     max: 10,
   });
+  // Idle-client failures (e.g. postgres restarts mid-life) must not crash
+  // the process: ready probes/retries handle recovery. Without this, the
+  // Pool's 'error' event throws unobserved.
+  pool.on('error', (e) => console.error(`pg pool idle error: ${(e as Error).message}`));
+  return pool;
 }
 
 export async function migrate(pool: Pool): Promise<void> {
