@@ -9,7 +9,18 @@ import { UpstreamPool } from './pool.js';
 
 const cfg = loadConfig();
 const pool = createPool(cfg.pg);
-await migrate(pool);
+// Postgres may still be booting after a node restart; retry instead of
+// crashlooping (readiness already keeps us out of endpoints meanwhile).
+for (let i = 1; ; i++) {
+  try {
+    await migrate(pool);
+    break;
+  } catch (e) {
+    if (i >= 10) throw e;
+    console.error(`migrate attempt ${i} failed, retrying: ${(e as Error).message}`);
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
 const upstreams = new UpstreamPool(pool, cfg.credKey);
 upstreams.start();
 
