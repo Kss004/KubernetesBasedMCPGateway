@@ -1,3 +1,6 @@
 mockMcp:
   image: mock-mcp
   tag: "0.1.0"
+everythingMcp:
+  image: everything-mcp
+  tag: "0.1.0"
