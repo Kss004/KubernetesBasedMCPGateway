@@ -25,6 +25,28 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // T4.1: team users + API keys. Keys are 32 random bytes, shown once,
+    // stored as SHA-256 hex (indexable lookup; bcrypt is for passwords).
+    version: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text UNIQUE NOT NULL,
+        role text NOT NULL CHECK (role IN ('admin','member')),
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key_hash text UNIQUE NOT NULL,
+        prefix text NOT NULL,
+        revoked boolean NOT NULL DEFAULT false,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS api_keys_user_idx ON api_keys(user_id);
+    `,
+  },
 ];
 
 export function createPool(pg: {
