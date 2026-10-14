@@ -1,11 +1,14 @@
-// Gateway entry (T3.1/T3.2): config, migrations, /healthz, /readyz,
-// admin server registry. /mcp is 501 until the human-written aggregator
-// (T3.4) + router (T3.5) land; see HANDOFF.md for their exact contracts.
+// Gateway entry (T3.1/T3.2, T3.5 router, T4.1 keys): config, migrations,
+// /healthz, /readyz, admin server registry + users/keys, aggregated /mcp.
 import http from 'node:http';
+import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { createPool, migrate } from './db.js';
 import { listServers, createServer, patchServer, deleteServer } from './servers.js';
+import { Aggregator } from './aggregator.js';
+import { handleMcp } from './router.js';
 import { UpstreamPool } from './pool.js';
+import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 
 const cfg = loadConfig();
 const pool = createPool(cfg.pg);
@@ -23,8 +26,12 @@ for (let i = 1; ; i++) {
 }
 const upstreams = new UpstreamPool(pool, cfg.credKey);
 upstreams.start();
+const aggregator = new Aggregator(pool, cfg.credKey);
+aggregator.start();
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
+const isAdmin = (req: http.IncomingMessage): boolean =>
+  ADMIN_TOKEN !== '' && (req.headers.authorization ?? '') === `Bearer ${ADMIN_TOKEN}`;
 const readJson = (req: http.IncomingMessage, limit = 64 << 10): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -69,8 +76,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/mcp') {
-      // T3.4/T3.5: authenticate the user key, serve aggregated tools.
-      res.writeHead(501).end('mcp not wired yet (T3.4/T3.5)');
+      if (req.method !== 'POST') {
+        send(res, 405, { error: 'method not allowed' });
+        return;
+      }
+      try {
+        const body = await readJson(req, 1 << 20);
+        const out = await handleMcp({
+          pg: pool,
+          aggregator,
+          upstreams,
+          auth: req.headers.authorization ?? '',
+          body,
+        });
+        send(res, out.status, out.json);
+      } catch (e) {
+        send(res, errStatus(e), { error: (e as Error).message });
+      }
       return;
     }
     if ((req.url ?? '').startsWith('/api/servers')) {
@@ -119,6 +141,64 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       send(res, 200, { upstreams: upstreams.getStates() });
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/users')) {
+      if (!isAdmin(req)) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      try {
+        if (req.method === 'GET' && req.url === '/api/users') {
+          send(res, 200, { users: await listUsers(pool) });
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/users') {
+          const v = z.object({ name: z.string().min(1).max(64), role: z.enum(['admin', 'member']) }).parse(
+            await readJson(req),
+          );
+          send(res, 201, await createUser(pool, v.name, v.role));
+          return;
+        }
+        send(res, 405, { error: 'method not allowed' });
+      } catch (e) {
+        const status = errStatus(e);
+        if ((e as { code?: string }).code === '23505') send(res, 409, { error: 'name taken' });
+        else {
+          if (status === 500) console.error('users api', (e as Error).message);
+          send(res, status, { error: (e as Error).message });
+        }
+      }
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/keys')) {
+      if (!isAdmin(req)) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      try {
+        if (req.method === 'GET' && req.url === '/api/keys') {
+          send(res, 200, { keys: await listKeys(pool) });
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/keys') {
+          const v = z.object({ user_id: z.string().uuid() }).parse(await readJson(req));
+          // Plaintext key returned ONCE here; never stored, never logged.
+          send(res, 201, await createApiKey(pool, v.user_id));
+          return;
+        }
+        const m = /^\/api\/keys\/([0-9a-f-]{36})\/revoke$/.exec(req.url ?? '');
+        if (req.method === 'POST' && m) {
+          if (!(await revokeKey(pool, m[1]))) send(res, 404, { error: 'not found' });
+          else send(res, 200, { revoked: true });
+          return;
+        }
+        send(res, 405, { error: 'method not allowed' });
+      } catch (e) {
+        const status = errStatus(e);
+        if (status === 500) console.error('keys api', (e as Error).message);
+        send(res, status, { error: (e as Error).message });
+      }
       return;
     }
     if ((req.url ?? '').startsWith('/.well-known/')) {
