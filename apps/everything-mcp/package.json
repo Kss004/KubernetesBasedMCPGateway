@@ -1,0 +1,14 @@
+{
+  "name": "everything-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "mcp-mini": "file:../mcp-mini",
+    "zod": "4.6.5"
+  }
+}

@@ -1,0 +1,64 @@
+# everything-mcp in urumi-upstreams (T7.1): ClusterIP, no Ingress.
+# Same shape as mock-mcp: ingress default-deny, only urumi-gateway reaches it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-everything-mcp
+spec:
+  ports:
+    - port: 3000
+  selector:
+    app: everything-mcp
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-everything-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: everything-mcp
+  template:
+    metadata:
+      labels:
+        app: everything-mcp
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: everything-mcp
+          image: "{{ .Values.everythingMcp.image }}:{{ .Values.everythingMcp.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: everything-mcp-ingress
+spec:
+  podSelector:
+    matchLabels: { app: everything-mcp }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: urumi-gateway
+      ports: [{ port: 3000 }]
