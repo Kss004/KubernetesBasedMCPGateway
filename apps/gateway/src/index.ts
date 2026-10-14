@@ -1,5 +1,5 @@
-// Gateway entry (T3.1/T3.2, T3.5 router, T4.1 keys): config, migrations,
-// /healthz, /readyz, admin server registry + users/keys, aggregated /mcp.
+// Gateway entry: config, migrations, /healthz, /readyz, admin server
+// registry + users/keys, session login, audit, aggregated /mcp.
 import http from 'node:http';
 import { z } from 'zod';
 import { loadConfig } from './config.js';
@@ -9,6 +9,15 @@ import { Aggregator } from './aggregator.js';
 import { handleMcp } from './router.js';
 import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
+import { listAudit } from './audit.js';
+import {
+  hashPassword,
+  checkPassword,
+  checkPasswordDummy,
+  mintSession,
+  verifySession,
+  parseCookies,
+} from './session.js';
 
 const cfg = loadConfig();
 const pool = createPool(cfg.pg);
@@ -30,8 +39,38 @@ const aggregator = new Aggregator(pool, cfg.credKey);
 aggregator.start();
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
+const SESSION_RAW = process.env.SESSION_SECRET ?? '';
+const SESSION_SECRET = SESSION_RAW.length >= 16 ? Buffer.from(SESSION_RAW, 'utf8') : null;
 const isAdmin = (req: http.IncomingMessage): boolean =>
   ADMIN_TOKEN !== '' && (req.headers.authorization ?? '') === `Bearer ${ADMIN_TOKEN}`;
+
+interface SessionUser {
+  id: string;
+  name: string;
+  role: 'admin' | 'member';
+}
+async function sessionUser(req: http.IncomingMessage): Promise<SessionUser | null> {
+  if (!SESSION_SECRET) return null;
+  const token = parseCookies(req.headers.cookie).session;
+  if (!token) return null;
+  const v = verifySession(token, SESSION_SECRET);
+  if (!v) return null;
+  const { rows } = await pool.query('SELECT id, name, role FROM users WHERE id = $1', [v.userId]);
+  return rows[0] ?? null;
+}
+// Admin via bootstrap token (scripts) or an admin session (dashboard).
+// Session-authed mutations need a JSON content type (CSRF defence).
+const isJsonReq = (req: http.IncomingMessage): boolean =>
+  (req.headers['content-type'] ?? '').includes('application/json');
+async function adminAuth(req: http.IncomingMessage): Promise<SessionUser | 'token' | null> {
+  if (isAdmin(req)) return 'token';
+  const u = await sessionUser(req);
+  if (u && u.role === 'admin') {
+    if (req.method !== 'GET' && !isJsonReq(req)) return null;
+    return u;
+  }
+  return null;
+}
 const readJson = (req: http.IncomingMessage, limit = 64 << 10): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -96,8 +135,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/servers')) {
-      const h = req.headers.authorization ?? '';
-      if (ADMIN_TOKEN === '' || h !== `Bearer ${ADMIN_TOKEN}`) {
+      if (!(await adminAuth(req))) {
         send(res, 401, { error: 'unauthorized' });
         return;
       }
@@ -135,8 +173,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/api/upstreams' && req.method === 'GET') {
-      const h = req.headers.authorization ?? '';
-      if (ADMIN_TOKEN === '' || h !== `Bearer ${ADMIN_TOKEN}`) {
+      if (!(await adminAuth(req))) {
         send(res, 401, { error: 'unauthorized' });
         return;
       }
@@ -144,7 +181,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/users')) {
-      if (!isAdmin(req)) {
+      if (!(await adminAuth(req))) {
         send(res, 401, { error: 'unauthorized' });
         return;
       }
@@ -160,6 +197,18 @@ const server = http.createServer(async (req, res) => {
           send(res, 201, await createUser(pool, v.name, v.role));
           return;
         }
+        // Invite: admin sets a one-time password (no email infra by design).
+        const mp = /^\/api\/users\/([0-9a-f-]{36})\/password$/.exec(req.url ?? '');
+        if (req.method === 'POST' && mp) {
+          const v = z.object({ password: z.string().min(8).max(256) }).parse(await readJson(req));
+          const { rowCount } = await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+            await hashPassword(v.password),
+            mp[1],
+          ]);
+          if ((rowCount ?? 0) === 0) send(res, 404, { error: 'not found' });
+          else send(res, 200, { ok: true });
+          return;
+        }
         send(res, 405, { error: 'method not allowed' });
       } catch (e) {
         const status = errStatus(e);
@@ -172,7 +221,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/keys')) {
-      if (!isAdmin(req)) {
+      // Member self-service lives under /api/me/keys; this stays admin-only.
+      if (!(await adminAuth(req))) {
         send(res, 401, { error: 'unauthorized' });
         return;
       }
@@ -199,6 +249,102 @@ const server = http.createServer(async (req, res) => {
         if (status === 500) console.error('keys api', (e as Error).message);
         send(res, status, { error: (e as Error).message });
       }
+      return;
+    }
+    if (req.url === '/api/login' && req.method === 'POST') {
+      if (!SESSION_SECRET) {
+        send(res, 503, { error: 'login not configured' });
+        return;
+      }
+      try {
+        const v = z.object({ name: z.string().min(1), password: z.string().min(1) }).parse(await readJson(req));
+        const { rows } = await pool.query('SELECT id, name, role, password_hash FROM users WHERE name = $1', [v.name]);
+        const u = rows[0] as { id: string; name: string; role: 'admin' | 'member'; password_hash: string | null } | undefined;
+        const okLogin = u?.password_hash
+          ? await checkPassword(v.password, u.password_hash)
+          : await checkPasswordDummy(v.password).then(() => false);
+        if (!u || !okLogin) {
+          send(res, 401, { error: 'invalid credentials' });
+          return;
+        }
+        const token = mintSession(u.id, SESSION_SECRET);
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Set-Cookie': `session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`,
+        });
+        res.end(JSON.stringify({ id: u.id, name: u.name, role: u.role }));
+      } catch (e) {
+        send(res, errStatus(e), { error: (e as Error).message });
+      }
+      return;
+    }
+    if (req.url === '/api/logout' && req.method === 'POST') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Set-Cookie': 'session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0',
+      });
+      res.end('{}');
+      return;
+    }
+    if (req.url === '/api/me' && req.method === 'GET') {
+      const u = await sessionUser(req);
+      if (!u) send(res, 401, { error: 'unauthorized' });
+      else send(res, 200, u);
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/me/keys')) {
+      const u = await sessionUser(req);
+      if (!u) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (req.method !== 'GET' && !isJsonReq(req)) {
+        send(res, 403, { error: 'json content type required' });
+        return;
+      }
+      try {
+        if (req.method === 'GET' && req.url === '/api/me/keys') {
+          const { rows } = await pool.query(
+            `SELECT k.id, k.prefix, k.revoked, k.created_at FROM api_keys k
+             WHERE k.user_id = $1 ORDER BY k.created_at`,
+            [u.id],
+          );
+          send(res, 200, { keys: rows });
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/me/keys') {
+          send(res, 201, await createApiKey(pool, u.id));
+          return;
+        }
+        const m = /^\/api\/me\/keys\/([0-9a-f-]{36})\/revoke$/.exec(req.url ?? '');
+        if (req.method === 'POST' && m) {
+          const { rowCount } = await pool.query('UPDATE api_keys SET revoked = true WHERE id = $1 AND user_id = $2', [
+            m[1],
+            u.id,
+          ]);
+          if ((rowCount ?? 0) === 0) send(res, 404, { error: 'not found' });
+          else send(res, 200, { revoked: true });
+          return;
+        }
+        send(res, 405, { error: 'method not allowed' });
+      } catch (e) {
+        send(res, errStatus(e), { error: (e as Error).message });
+      }
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/audit') && req.method === 'GET') {
+      if (isAdmin(req)) {
+        const url = new URL(req.url ?? '/api/audit', 'http://x');
+        send(res, 200, { audit: await listAudit(pool, url.searchParams.get('user_id') ?? undefined) });
+        return;
+      }
+      const u = await sessionUser(req);
+      if (!u) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      // Members see only their own rows; admins see all (D22).
+      send(res, 200, { audit: await listAudit(pool, u.role === 'admin' ? undefined : u.id) });
       return;
     }
     if ((req.url ?? '').startsWith('/.well-known/')) {

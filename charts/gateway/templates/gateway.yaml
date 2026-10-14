@@ -48,6 +48,9 @@ spec:
             - name: ADMIN_TOKEN
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-admin, key: token }
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-session, key: secret }
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 256Mi }

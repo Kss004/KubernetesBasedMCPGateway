@@ -54,6 +54,20 @@ export async function revokeKey(pool: Pool, id: string): Promise<boolean> {
   return (rowCount ?? 0) > 0;
 }
 
+export async function identifyKey(
+  pool: Pool,
+  key: string,
+): Promise<{ keyId: string; userId: string; revoked: boolean } | null> {
+  if (!key) return null;
+  const { rows } = await pool.query(
+    `SELECT k.id AS key_id, u.id AS user_id, k.revoked FROM api_keys k
+     JOIN users u ON u.id = k.user_id WHERE k.key_hash = $1`,
+    [hashKey(key)],
+  );
+  if (rows.length === 0) return null;
+  return { keyId: rows[0].key_id, userId: rows[0].user_id, revoked: rows[0].revoked };
+}
+
 export async function authenticate(pool: Pool, key: string): Promise<KeyUser | null> {
   if (!key) return null;
   const { rows } = await pool.query(

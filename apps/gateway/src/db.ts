@@ -47,6 +47,31 @@ const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS api_keys_user_idx ON api_keys(user_id);
     `,
   },
+  {
+    // Audit (D22): every tools/call incl. failures and denied attempts.
+    // No args or results stored (customer data / secrets risk).
+    version: 3,
+    sql: `
+      CREATE TABLE IF NOT EXISTS audit (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        key_id uuid,
+        server_slug text NOT NULL DEFAULT '',
+        tool text NOT NULL,
+        outcome text NOT NULL CHECK (outcome IN ('ok','error','denied')),
+        error_class text,
+        duration_ms integer NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS audit_user_idx ON audit(user_id, created_at DESC);
+    `,
+  },
+  {
+    // Login (dashboard): password hash per user. Invite = admin sets a
+    // one-time password; no email infra exists so the UI must say so.
+    version: 4,
+    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;`,
+  },
 ];
 
 export function createPool(pg: {

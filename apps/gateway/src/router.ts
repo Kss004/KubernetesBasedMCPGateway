@@ -4,7 +4,8 @@
 // T11.1 — the grantsAllow() hook below is where that check lands.
 // Audit rows for denied attempts are T4.4 (console-logged until then).
 import type { Pool as PgPool } from 'pg';
-import { authenticate } from './keys.js';
+import { authenticate, identifyKey } from './keys.js';
+import { logCall } from './audit.js';
 import { splitName, type Aggregator } from './aggregator.js';
 import type { UpstreamPool } from './pool.js';
 
@@ -39,9 +40,6 @@ export async function handleMcp(opts: {
   body: unknown;
 }): Promise<{ status: number; json: unknown }> {
   const key = opts.auth.startsWith('Bearer ') ? opts.auth.slice(7) : '';
-  const me = await authenticate(opts.pg, key);
-  if (!me) return { status: 401, json: { error: 'unauthorized' } };
-
   const b = opts.body as RpcBody | null;
   if (!b || typeof b !== 'object' || typeof b.method !== 'string') {
     return { status: 400, json: { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'invalid request' } } };
@@ -52,6 +50,35 @@ export async function handleMcp(opts: {
     status,
     json: { jsonrpc: '2.0', id, error: { code, message } },
   });
+  // Name the target for denied-attempt attribution (D22); never args.
+  const target = (suffix: string): string => {
+    if (b.method === 'tools/call') {
+      const n = ((b.params ?? {}) as { name?: unknown }).name;
+      if (typeof n === 'string') return n;
+    }
+    return `${b.method ?? '?'}${suffix}`;
+  };
+
+  const me = await authenticate(opts.pg, key);
+  if (!me) {
+    // Attribute revoked/known keys to their user; unknown keys stay anonymous.
+    identifyKey(opts.pg, key)
+      .then((known) => {
+        if (known) {
+          return logCall(opts.pg, {
+            userId: known.userId,
+            keyId: known.keyId,
+            serverSlug: '',
+            tool: target(':auth'),
+            outcome: 'denied',
+            errorClass: known.revoked ? 'revoked_key' : 'invalid_key',
+            durationMs: 0,
+          });
+        }
+      })
+      .catch(() => {});
+    return { status: 401, json: { error: 'unauthorized' } };
+  }
 
   switch (b.method) {
     case 'initialize': {
@@ -79,23 +106,67 @@ export async function handleMcp(opts: {
       const p = (b.params ?? {}) as { name?: unknown; arguments?: unknown };
       if (typeof p.name !== 'string') return err(-32602, 'unknown tool');
       const hit = opts.aggregator.resolve(p.name);
-      if (!hit) return err(-32602, 'unknown tool');
+      if (!hit) {
+        logCall(opts.pg, {
+          userId: me.userId,
+          keyId: me.keyId,
+          serverSlug: '',
+          tool: p.name,
+          outcome: 'error',
+          errorClass: 'unknown_tool',
+          durationMs: 0,
+        }).catch(() => {});
+        return err(-32602, 'unknown tool');
+      }
       if (!grantsAllow(me.role, p.name)) {
-        console.error(`audit denied user=${me.userId} tool=${p.name}`);
+        logCall(opts.pg, {
+          userId: me.userId,
+          keyId: me.keyId,
+          serverSlug: hit.tool.serverSlug,
+          tool: p.name,
+          outcome: 'denied',
+          errorClass: 'forbidden',
+          durationMs: 0,
+        }).catch(() => {});
         return err(-32000, 'forbidden for role');
       }
       const args = (p.arguments ?? {}) as Record<string, unknown>;
       const upstreamName = splitName(p.name)?.tool ?? p.name; // part after the first __
+      const t0 = Date.now();
+      const done = (outcome: 'ok' | 'error', errorClass?: string) =>
+        logCall(opts.pg, {
+          userId: me.userId,
+          keyId: me.keyId,
+          serverSlug: hit.tool.serverSlug,
+          tool: p.name as string,
+          outcome,
+          errorClass: errorClass ?? null,
+          durationMs: Date.now() - t0,
+        }).catch(() => {});
       try {
         const result = await opts.upstreams.callTool(hit.serverId, upstreamName, args, CALL_TIMEOUT_MS);
+        await done('ok');
         return ok(capResult(result));
       } catch (e) {
         const st = (e as { status?: number }).status ?? 500;
         const msg = (e as Error).message ?? 'upstream error';
-        if (st === 404) return err(-32602, 'unknown tool');
-        if (st === 503) return err(-32000, 'server disabled');
-        if (st === 502) return err(-32000, 'server unreachable');
-        if (st === 504) return err(-32000, msg);
+        if (st === 404) {
+          await done('error', 'unknown_tool');
+          return err(-32602, 'unknown tool');
+        }
+        if (st === 503) {
+          await done('error', 'server_disabled');
+          return err(-32000, 'server disabled');
+        }
+        if (st === 502) {
+          await done('error', 'server_unreachable');
+          return err(-32000, 'server unreachable');
+        }
+        if (st === 504) {
+          await done('error', 'upstream_timeout');
+          return err(-32000, msg);
+        }
+        await done('error', 'upstream_error');
         return err(-32603, msg);
       }
     }
