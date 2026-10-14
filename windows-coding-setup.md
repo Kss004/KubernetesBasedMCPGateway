@@ -73,3 +73,14 @@ kind version; helm version; kubectl version --client; node -v; make -v
 ```
 
 Pass = memory/CPU match `.wslconfig`, all versions print. `make` currently fails — expected until human apt-installs it.
+
+## 8. Ingress hostnames for CLI tools (added 2026-10-14)
+
+Browsers resolve `*.localhost` to loopback on their own, but CLI tools inside
+WSL2 (Node, MCP Inspector) did not. Fix: map them in WSL2's `/etc/hosts`
+(human runs, needs sudo — persists across WSL restarts):
+
+```sh
+grep -q 'app.localhost' /etc/hosts || echo '127.0.0.1 app.localhost shop.localhost' | sudo tee -a /etc/hosts
+getent hosts app.localhost shop.localhost
+```

@@ -372,13 +372,14 @@ Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretc
 
 ## 12. In flight
 
-P0–P2 done and committed. P3 partial: mock-mcp live, gateway scaffold +
-registry + pool + `make seed` done and verified (woo+mock Connected,
-scale-to-0 → Unreachable). `/mcp` returns 501.
+P0–P3 done. Gateway live: user keys, cached aggregation, `/mcp` routing
+(11 tools, woo+mock+everything Connected). **C2 met 2026-10-14:** MCP
+Inspector v2.11.0 over ingress with a member key — 11 tools in 24ms,
+`mock__convert_currency` call in 31ms. WSL2 `/etc/hosts` now maps
+`app/shop.localhost` (CLI tools could not resolve them before).
+Hand-written zones lifted by the human 2026-10-14; agent writes, human reviews.
 
-**Next action: human writes T3.4 aggregator + T3.5 router** (contracts in
-`apps/gateway/HANDOFF.md`; Agents.md §3 — agents review only). Suggested order:
-T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
+**Next: audit log, then dashboard login, then chat loop (C3).**
 
 ---
 
@@ -410,11 +411,13 @@ T4.1 keys → T3.4 → T3.5 → T3.7 compat (Inspector + Claude Code, C2).
 11. **Upstream credential path verified live** (T2.4/T3.3): static bearer via `requestInit.headers.Authorization` works against our servers; `requestInit` exists on the 1.x client transport. Health loop flips Connected→Unreachable on scale-to-0 (~50s stock, ~15s with 10s grace) and back.
 12. **K8s RBAC: `resourceNames` is ignored on `create`** — real POST 403s while `kubectl auth can-i` says yes. Role grants bare `create` (namespace-bounded) + name-scoped get/delete.
 13. **Mount PVCs ON the image's VOLUME path, never its parent (2026-10-13).** The postgres chart mounted at `/var/lib/postgresql` while the image declares `VOLUME .../data` → double mount, postgres wrote to ephemeral storage, first container restart wiped the gateway DB (initdb ran fresh). Fix: mount at `/var/lib/postgresql/data`. MariaDB/WP were correct (single mounts). Verify with `/proc/mounts`, not assumptions.
+14. **C2 met 2026-10-14 (gateway 0.2.0).** `/mcp` serves 11 prefixed tools across woo+mock+everything; curl: clean 401 no/bad key, `initialize` 2025-11-25, `tools/call` routes to all three (real Woo products returned), unknown → -32602. SDK client via gateway: 11 tools + call. Inspector v2.11.0 over ingress with member key: 11 tools in 24ms, `mock__convert_currency` 100 USD→EUR = 92 in 31ms. Key revoke round-trip verified. Hand-written zones lifted by human; agent writes, human reviews.
+15. **WSL2 CLI DNS (2026-10-14).** WSL2 does not resolve `*.localhost` via the Windows resolver for all CLI tools; mapping `127.0.0.1 app.localhost shop.localhost` in WSL2 `/etc/hosts` fixed Node/Inspector CLI access to the ingress. Browsers were unaffected.
 
 **Not yet verified (check before relying on them)**
 
-- Gemini's and Ollama's OpenAI-compatible endpoints both return tool calls in the shape the loop expects (T6.1). Early key/model smoke test due before Oct 14 (R4).
-- Claude Code and MCP Inspector handle the 401 and `/.well-known` 404 behaviour as described (T3.7). Gateway already returns clean 401 + JSON 404; client behaviour still to prove.
+- Gemini's and Ollama's OpenAI-compatible endpoints both return tool calls in the shape the loop expects (T6.1). Early key/model smoke test due before Oct 14 (R4) — now overdue, do before the chat loop.
+- Claude Code handles the 401 and `/.well-known` 404 behaviour as described (T3.7). Inspector proven; Claude Code still to prove.
 - Whether Ollama's OpenAI-compatible endpoint returns tool calls in the same shape as Gemini's (T6.1).
 
 ---
