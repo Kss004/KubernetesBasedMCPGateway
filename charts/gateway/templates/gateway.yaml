@@ -51,6 +51,16 @@ spec:
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-session, key: secret }
+            # P6 chat LLM (D10): base URL + pinned model are values (not secrets);
+            # the key arrives out-of-band via `make secrets` (optional so the
+            # gateway still boots without it; /api/chat then answers 503).
+            - name: LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+            - name: LLM_MODEL
+              value: {{ .Values.llm.model | quote }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.llm.secretName | quote }}, key: api-key, optional: true }
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 256Mi }

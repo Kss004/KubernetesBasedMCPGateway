@@ -12,10 +12,13 @@ const wooCfg: WooConfig = {
   timeoutMs: Number(process.env.WOO_TIMEOUT_MS ?? 10000),
 };
 
+// Fail closed: this server holds the store's REST keys, so never run unauthenticated.
+if (!process.env.WOO_MCP_TOKEN) throw new Error('WOO_MCP_TOKEN is required');
+
 serve({
   name: 'woo-mcp',
   version: '0.1.0',
   port: Number(process.env.PORT ?? 3000),
-  bearerToken: process.env.WOO_MCP_TOKEN ?? '',
+  bearerToken: process.env.WOO_MCP_TOKEN,
   register: (server: McpServer) => registerTools(server, wooCfg),
 });

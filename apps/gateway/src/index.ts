@@ -1,12 +1,17 @@
 // Gateway entry: config, migrations, /healthz, /readyz, admin server
 // registry + users/keys, session login, audit, aggregated /mcp.
 import http from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { loadConfig } from './config.js';
 import { createPool, migrate } from './db.js';
 import { listServers, createServer, patchServer, deleteServer } from './servers.js';
 import { Aggregator } from './aggregator.js';
 import { handleMcp } from './router.js';
+import { handleChat } from './chat.js';
 import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 import { listAudit } from './audit.js';
@@ -41,8 +46,12 @@ aggregator.start();
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SESSION_RAW = process.env.SESSION_SECRET ?? '';
 const SESSION_SECRET = SESSION_RAW.length >= 16 ? Buffer.from(SESSION_RAW, 'utf8') : null;
-const isAdmin = (req: http.IncomingMessage): boolean =>
-  ADMIN_TOKEN !== '' && (req.headers.authorization ?? '') === `Bearer ${ADMIN_TOKEN}`;
+const isAdmin = (req: http.IncomingMessage): boolean => {
+  if (ADMIN_TOKEN === '') return false;
+  const a = Buffer.from(req.headers.authorization ?? '');
+  const b = Buffer.from(`Bearer ${ADMIN_TOKEN}`);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
 
 interface SessionUser {
   id: string;
@@ -99,6 +108,42 @@ const send = (res: http.ServerResponse, status: number, body: unknown) => {
 };
 const errStatus = (e: unknown): number => (e as { status?: number }).status ?? 500;
 
+// P5 dashboard: static files, no build step (apps/dashboard/public).
+// Preloaded once; exact paths only (no join from the URL, no traversal).
+// Prod image copies the dir to ./public (Dockerfile); dev resolves from the tree.
+const dashDir = (() => {
+  const candidates = [
+    process.env.DASHBOARD_DIR ?? '',
+    'public',
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'dashboard', 'public'),
+  ];
+  for (const d of candidates) {
+    if (!d) continue;
+    try {
+      if (fs.statSync(d).isDirectory()) return d;
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+})();
+const dashFiles = new Map<string, { buf: Buffer; type: string }>();
+if (dashDir) {
+  const entries: Array<[string, string, string]> = [
+    ['/', 'index.html', 'text/html; charset=utf-8'],
+    ['/index.html', 'index.html', 'text/html; charset=utf-8'],
+    ['/app.js', 'app.js', 'application/javascript; charset=utf-8'],
+    ['/style.css', 'style.css', 'text/css; charset=utf-8'],
+  ];
+  for (const [url, file, type] of entries) {
+    try {
+      dashFiles.set(url, { buf: fs.readFileSync(path.join(dashDir, file)), type });
+    } catch {
+      // leave unmapped; GET / then 503s instead of serving a partial app
+    }
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/healthz') {
@@ -114,7 +159,7 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    if (req.url === '/mcp') {
+    if ((req.url ?? '').split('?')[0] === '/mcp') {
       if (req.method !== 'POST') {
         send(res, 405, { error: 'method not allowed' });
         return;
@@ -178,6 +223,41 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       send(res, 200, { upstreams: upstreams.getStates() });
+      return;
+    }
+    if ((req.url ?? '').split('?')[0] === '/api/tools' && req.method === 'GET') {
+      // Dashboard servers page: cached tool names + description-change flags.
+      if (!(await adminAuth(req))) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      send(res, 200, { tools: aggregator.listAllTools() });
+      return;
+    }
+    if ((req.url ?? '').split('?')[0] === '/api/chat' && req.method === 'POST') {
+      // P6 chat (D7/D22): logged-in session user, history from the client each
+      // request, no server storage. JSON content-type required (CSRF defence).
+      const u = await sessionUser(req);
+      if (!u) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (!isJsonReq(req)) {
+        send(res, 403, { error: 'json content type required' });
+        return;
+      }
+      try {
+        await handleChat({ pg: pool, aggregator, upstreams, user: u, body: await readJson(req, 256 << 10), res });
+      } catch (e) {
+        if (!res.headersSent) send(res, errStatus(e), { error: (e as Error).message });
+        else {
+          try {
+            res.end();
+          } catch {
+            // client already gone
+          }
+        }
+      }
       return;
     }
     if ((req.url ?? '').startsWith('/api/users')) {
@@ -335,7 +415,12 @@ const server = http.createServer(async (req, res) => {
     if ((req.url ?? '').startsWith('/api/audit') && req.method === 'GET') {
       if (isAdmin(req)) {
         const url = new URL(req.url ?? '/api/audit', 'http://x');
-        send(res, 200, { audit: await listAudit(pool, url.searchParams.get('user_id') ?? undefined) });
+        const uid = url.searchParams.get('user_id') ?? undefined;
+        if (uid !== undefined && !/^[0-9a-f-]{36}$/i.test(uid)) {
+          send(res, 400, { error: 'user_id must be a uuid' });
+          return;
+        }
+        send(res, 200, { audit: await listAudit(pool, uid) });
         return;
       }
       const u = await sessionUser(req);
@@ -350,6 +435,17 @@ const server = http.createServer(async (req, res) => {
     if ((req.url ?? '').startsWith('/.well-known/')) {
       // D26: real clients probe OAuth discovery; we use static keys.
       res.writeHead(404, { 'Content-Type': 'application/json' }).end('{}');
+      return;
+    }
+    const dashPath = (req.url ?? '').split('?')[0];
+    if (req.method === 'GET' && dashFiles.has(dashPath)) {
+      const f = dashFiles.get(dashPath)!;
+      res.writeHead(200, { 'Content-Type': f.type });
+      res.end(f.buf);
+      return;
+    }
+    if (req.method === 'GET' && (dashPath === '/' || dashPath === '/index.html') && !dashFiles.has('/')) {
+      res.writeHead(503, { 'Content-Type': 'application/json' }).end('{"error":"dashboard not built"}');
       return;
     }
     res.writeHead(404).end();

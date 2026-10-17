@@ -1,0 +1,7 @@
+# Prod overrides — STUB, TODO(verify): no k3s run yet.
+mockMcp:
+  image: ghcr.io/Kss004/KubernetesBasedMCPGateway/mock-mcp # TODO(verify): buildx push
+  tag: "0.1.0"
+everythingMcp:
+  image: ghcr.io/Kss004/KubernetesBasedMCPGateway/everything-mcp # TODO(verify): buildx push
+  tag: "0.1.0"

@@ -1,0 +1,11 @@
+# Prod overrides (Mac mini k3s, arm64) — STUB, TODO(verify): no k3s run yet (Oct 20 go/no-go).
+# Diff vs local: domain, ingress class, storage, secrets/pull.
+appHost: TODO(verify) # e.g. app.<lan-host>.nip.io or real domain; never shop.localhost coupling
+images:
+  postgres: "postgres:17" # TODO(verify): must be multi-arch (linux/arm64) or GHCR mirror
+  gateway: "ghcr.io/Kss004/KubernetesBasedMCPGateway/gateway" # TODO(verify): buildx amd64+arm64
+# gatewayTag: pin the release tag used for the prod run
+storage:
+  postgres: 5Gi # TODO(verify): k3s StorageClass name (default local-path differs)
+# Secrets: still generated in-chart; GHCR pull secret per namespace (imagePullSecret);
+# LLM key out-of-band via kubectl (never in this file). TLS: TODO(verify) cert-manager or terminate elsewhere.

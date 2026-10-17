@@ -6,7 +6,7 @@
 // never waits on a dead upstream. Stateful upstreams (everything) can drop
 // sessions with 404: callUpstream re-connects once and retries once.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Pool as PgPool } from 'pg';
 import { listServers } from './servers.js';
 import { decryptSecret } from './crypto.js';
@@ -55,7 +55,8 @@ export class UpstreamPool {
     await this.refreshSecrets();
     const seen = new Set<string>();
     const now = Date.now();
-    for (const r of rows) {
+    // Probe servers in parallel so one dead upstream cannot delay the others' status.
+    await Promise.allSettled(rows.map(async (r) => {
       seen.add(r.id);
       let st = this.states.get(r.id);
       if (!st) {
@@ -68,9 +69,9 @@ export class UpstreamPool {
         st.status = 'Disabled';
         st.failures = 0;
         this.secrets.delete(r.id);
-        continue;
+        return;
       }
-      if (now < st.skipUntil) continue; // backed off while down
+      if (now < st.skipUntil) return; // backed off while down
       const ok = await this.probe(st);
       if (ok) {
         st.status = 'Connected';
@@ -82,7 +83,7 @@ export class UpstreamPool {
         // capped backoff while down: 5s, 10s, 20s, 30s max
         st.skipUntil = now + Math.min(30000, 5000 * 2 ** Math.max(0, st.failures - 1));
       }
-    }
+    }));
     for (const id of [...this.states.keys()]) {
       if (!seen.has(id)) {
         this.states.delete(id);
@@ -111,11 +112,7 @@ export class UpstreamPool {
   }
 
   private authHeaders(st: UpstreamState): Record<string, string> {
-    const secret = this.secrets.get(st.id);
-    if (!secret) return {};
-    if (st.auth_type === 'bearer') return { Authorization: `Bearer ${secret}` };
-    if (st.auth_type === 'header' && st.header_name) return { [st.header_name]: secret };
-    return {};
+    return authHeaders(st.auth_type, st.header_name, this.secrets.get(st.id));
   }
 
   async refreshSecrets(): Promise<void> {
@@ -176,5 +173,14 @@ export class UpstreamPool {
   }
 }
 
-const isSessionGone = (e: unknown): boolean =>
-  /404|session|not found/i.test((e as Error)?.message ?? '');
+/** Static upstream credential as request headers; shared by health, listing and calls. */
+export function authHeaders(authType: string, headerName: string | null, secret: string | undefined): Record<string, string> {
+  if (!secret) return {};
+  if (authType === 'bearer') return { Authorization: `Bearer ${secret}` };
+  if (authType === 'header' && headerName) return { [headerName]: secret };
+  return {};
+}
+
+// Only the transport's HTTP 404 (stateful upstream lost our session) is safe to
+// retry; tool errors that merely say "not found" must not re-run a write.
+export const isSessionGone = (e: unknown): boolean => e instanceof StreamableHTTPError && e.code === 404;

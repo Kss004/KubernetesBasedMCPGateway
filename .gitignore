@@ -28,3 +28,6 @@ Thumbs.db
 
 # Byte-compiled python (bootstrap scripts may add later)
 __pycache__/
+
+# local review notes, never commit
+bugs.md

@@ -1,0 +1,6 @@
+# Local overrides (kind). Base is values.yaml; only deltas here.
+storeHost: shop.localhost
+storage:
+  mariadb: 5Gi
+  wordpress: 5Gi
+# WP_HOME/WP_SITEURL derive from storeHost via WORDPRESS_CONFIG_EXTRA (D21).

@@ -16,15 +16,27 @@ export interface ServerRow {
   has_secret: boolean;
 }
 
-// SSRF allow-list arrives in T11.2; until then: http(s) with a hostname.
-// Cluster-internal servers are the normal case (D18/D25).
-function validUrl(raw: string): boolean {
+// T11.2 SSRF guard: upstreams are cluster-internal (D18/D25), so only
+// Service DNS in urumi-store / urumi-upstreams is allowed. Any IP literal is
+// denied (covers loopback 127/8, link-local 169.254/16 incl. 169.254.169.254,
+// and private ranges). Plain hostname check only.
+// shortcut: no DNS resolution at admission; a name later resolving to a
+// forbidden IP is not caught — resolve-and-recheck before dialing if that matters.
+export function validUrl(raw: string): boolean {
+  let u: URL;
   try {
-    const u = new URL(raw);
-    return (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname !== '';
+    u = new URL(raw);
   } catch {
     return false;
   }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  if (u.username !== '' || u.password !== '') return false;
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  if (host === '') return false;
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  if (/^[\d.]+$/.test(host)) return false; // dotted-decimal / decimal-int IP literal
+  if (host.includes(':')) return false; // any IPv6 literal (::1, fe80::/10, mapped)
+  return /^[a-z0-9-]+\.(urumi-store|urumi-upstreams)(\.svc(\.cluster\.local)?)?$/.test(host);
 }
 
 const SLUG = z.string().regex(/^[a-z0-9-]{1,32}$/);
@@ -117,6 +129,16 @@ export async function patchServer(
         );
       }
     }
+    // Validate the merged row, not the patch fields alone (same rules as create).
+    const { rows: chk } = await client.query(
+      `SELECT s.auth_type, s.header_name, (c.server_id IS NOT NULL) AS has_secret
+       FROM servers s LEFT JOIN server_credentials c ON c.server_id = s.id WHERE s.id = $1`,
+      [id],
+    );
+    const m = chk[0] as { auth_type: string; header_name: string | null; has_secret: boolean } | undefined;
+    if (m && m.auth_type !== 'none' && !m.has_secret) throw Object.assign(new Error('secret required'), { status: 400 });
+    if (m && m.auth_type === 'header' && !m.header_name)
+      throw Object.assign(new Error('header_name required'), { status: 400 });
     await client.query('COMMIT');
     if ((rowCount ?? 0) === 0) return null;
     const list = await listServers(pool);

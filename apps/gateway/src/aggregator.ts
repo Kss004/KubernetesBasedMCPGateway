@@ -10,6 +10,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { Pool as PgPool } from 'pg';
 import { listServers } from './servers.js';
 import { decryptSecret } from './crypto.js';
+import { authHeaders } from './pool.js';
 
 export const MAX_TOOLS_PER_SERVER = 200;
 export const MAX_NAME_LEN = 64;
@@ -80,7 +81,7 @@ export class Aggregator {
     return null;
   }
 
-  private async headersFor(serverId: string, authType: string): Promise<Record<string, string>> {
+  private async headersFor(serverId: string, authType: string, headerName: string | null): Promise<Record<string, string>> {
     const { rows } = await this.pg.query('SELECT enc_secret FROM server_credentials WHERE server_id = $1', [
       serverId,
     ]);
@@ -91,21 +92,21 @@ export class Aggregator {
     } catch {
       return {};
     }
-    if (authType === 'bearer') return { Authorization: `Bearer ${secret}` };
-    return {};
+    return authHeaders(authType, headerName, secret);
   }
 
   async refresh(): Promise<void> {
     const servers = await listServers(this.pg);
     const seen = new Set<string>();
-    for (const s of servers) {
+    // Parallel: a slow upstream only delays its own tool list (each has toolTimeoutMs).
+    await Promise.allSettled(servers.map(async (s) => {
       seen.add(s.id);
       if (!s.enabled) {
         this.cache.delete(s.id);
-        continue;
+        return;
       }
-      const tools = await this.fetchTools(s.id, s.url, s.auth_type).catch(() => null);
-      if (tools === null) continue; // keep last-known for Unreachable
+      const tools = await this.fetchTools(s).catch(() => null);
+      if (tools === null) return; // keep last-known for Unreachable
       const prev = this.cache.get(s.id);
       const withFlags = tools.map((t) => {
         const h = descHash(t.description);
@@ -116,19 +117,18 @@ export class Aggregator {
         tools: withFlags,
         hashes: new Map(withFlags.map((t) => [t.name, descHash(t.description)])),
       });
-    }
+    }));
     for (const id of [...this.cache.keys()]) if (!seen.has(id)) this.cache.delete(id);
   }
 
-  private async fetchTools(serverId: string, url: string, authType: string): Promise<PrefixedTool[]> {
-    const servers = await listServers(this.pg);
-    const slug = servers.find((s) => s.id === serverId)?.slug ?? '';
+  private async fetchTools(s: { id: string; slug: string; url: string; auth_type: string; header_name: string | null }): Promise<PrefixedTool[]> {
+    const { id: serverId, slug, url } = s;
     const client = new Client({ name: 'gateway-aggregator', version: '0.1.0' });
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), this.toolTimeoutMs);
     try {
       const transport = new StreamableHTTPClientTransport(new URL(url), {
-        requestInit: { headers: await this.headersFor(serverId, authType), signal: ctl.signal },
+        requestInit: { headers: await this.headersFor(serverId, s.auth_type, s.header_name), signal: ctl.signal },
       });
       await client.connect(transport);
       const { tools } = await client.listTools();

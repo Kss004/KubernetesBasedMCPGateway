@@ -1,7 +1,7 @@
 // MCP router (T3.5): authenticate the user key, serve aggregated tools.
 // Stateless (D6): this function handles one POST per call, no sessions.
-// Members default-allow every tool in the core (D23); per-tool grants are
-// T11.1 — the grantsAllow() hook below is where that check lands.
+// Members default-allow every tool except writes (D23/T11.1: grantsAllow
+// below hides denied tools from tools/list AND rejects direct tools/call).
 // Audit rows for denied attempts are T4.4 (console-logged until then).
 import type { Pool as PgPool } from 'pg';
 import { authenticate, identifyKey } from './keys.js';
@@ -20,9 +20,18 @@ export function capResult(payload: unknown): unknown {
   return { content: [{ type: 'text', text: s.slice(0, RESULT_CAP_BYTES - marker.length) + marker }], truncated: true };
 }
 
-// T11.1 hook: currently allow-all per D23 (members default-allow every tool).
-function grantsAllow(_role: 'admin' | 'member', _toolName: string): boolean {
-  return true;
+// T11.1 (D23): members default-allow every tool except writes.
+// shortcut: fixed in-code deny list; if per-user/per-server grants are needed, move to a DB table + admin API.
+const MEMBER_DENIED_SUFFIXES = new Set(['create_product', 'update_order_status']);
+
+/** MCP tool results report failure in-band (isError), not as a thrown error. */
+export const isToolError = (result: unknown): boolean =>
+  !!result && typeof result === 'object' && (result as { isError?: unknown }).isError === true;
+
+export function grantsAllow(role: 'admin' | 'member', toolName: string): boolean {
+  if (role === 'admin') return true;
+  const suffix = splitName(toolName)?.tool ?? toolName.split('__').pop() ?? toolName;
+  return !MEMBER_DENIED_SUFFIXES.has(suffix);
 }
 
 interface RpcBody {
@@ -95,11 +104,14 @@ export async function handleMcp(opts: {
     case 'ping':
       return ok({});
     case 'tools/list': {
-      const tools = opts.aggregator.listAllTools().map((t) => ({
-        name: t.name,
-        description: t.description,
-        inputSchema: t.inputSchema,
-      }));
+      const tools = opts.aggregator
+        .listAllTools()
+        .filter((t) => grantsAllow(me.role, t.name))
+        .map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        }));
       return ok({ tools });
     }
     case 'tools/call': {
@@ -145,7 +157,7 @@ export async function handleMcp(opts: {
         }).catch(() => {});
       try {
         const result = await opts.upstreams.callTool(hit.serverId, upstreamName, args, CALL_TIMEOUT_MS);
-        await done('ok');
+        await (isToolError(result) ? done('error', 'tool_error') : done('ok'));
         return ok(capResult(result));
       } catch (e) {
         const st = (e as { status?: number }).status ?? 500;

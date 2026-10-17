@@ -1,0 +1,7 @@
+# Local overrides (kind). Base is values.yaml; only deltas here.
+appHost: app.localhost
+storage:
+  postgres: 5Gi # local-path provisioner, RWO
+# Secrets: all generated in-chart (randAlphaNum + lookup, keep on uninstall).
+# Out-of-band only: LLM key via `make secrets` (kubectl create secret).
+# Ingress class: nginx (kind). StorageClass: standard (local-path).

@@ -1,0 +1,10 @@
+# Prod overrides (Mac mini k3s, arm64) — STUB, TODO(verify): no k3s run yet.
+storeHost: TODO(verify) # prod shop domain; WP_HOME/WP_SITEURL follow it (D21, no DB-stored URL)
+images:
+  wordpress: "wordpress:7.1.3-apache" # TODO(verify): arm64 digest
+  mariadb: "mariadb:11.8" # TODO(verify): arm64 digest
+storage:
+  mariadb: 5Gi # TODO(verify): k3s StorageClass
+  wordpress: 5Gi # TODO(verify): k3s StorageClass
+wooMcp:
+  image: ghcr.io/Kss004/KubernetesBasedMCPGateway/woo-mcp # TODO(verify): buildx push

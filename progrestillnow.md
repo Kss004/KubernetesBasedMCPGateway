@@ -43,7 +43,7 @@ There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
 | P0 Environment + scaffold + Makefile skeleton | Done (T0.1→T0.5, notes docs/notes/T0.1.md) |
 | P1 Store on K8s | Done (C1 met: checkout order 12, persistence, reset; T1.6) |
 | P2 Woo MCP server | Done (5 tools live, OAuth client, netpol pair; docs/woo-store-access.md) |
-| P3 Gateway core (+ mock-mcp first) | Partial: T3.0–T3.3 + T3.6 done. NEXT: human writes T3.4/T3.5 (HANDOFF.md) |
+| P3 Gateway core (+ mock-mcp first) | Partial: T3.0–T3.3 + T3.6 done. NEXT: T3.4/T3.5 (agent writes, human reviews; HANDOFF.md) |
 | P4 Users, keys, roles, audit | Not started |
 | P5 Dashboard | Not started |
 | P6 Chat agent | Not started |
@@ -297,7 +297,7 @@ Write the notes as you finish the phases they describe, so Oct 22 is polish, not
 - **T11.2 Security hardening.** SSRF guard on admin-added URLs: always block loopback and link-local (including `169.254.169.254`); because your own upstreams are cluster-internal, allow cluster Service names only in an allow-list of namespaces (`urumi-store`, `urumi-upstreams`). Optional egress allow-list (D25). Non-root containers and encryption at rest are already in the base tasks.
 - Phase 10 multi-store only if C3 is reached by end of Oct 16. Needs a decision first: shell out to the `helm` binary versus `@kubernetes/client-node`.
 
-**Delegation rule.** Write T3.4, T3.5, T4.1 and T4.3 yourself. The brief grades whether you can defend the internals live in Round 2, and those are the parts being graded. Delegate the dashboard, Helm templates, and Dockerfiles freely.
+**Delegation rule (changed 2026-10-14).** The agent writes T3.4, T3.5, T4.1 and T4.3 too; the human reviews every line of them before commit. The brief grades whether you can defend the internals live in Round 2, so review these as if you wrote them. Delegate the dashboard, Helm templates, and Dockerfiles freely.
 
 ---
 
@@ -329,7 +329,7 @@ Write the notes as you finish the phases they describe, so Oct 22 is polish, not
 | R7 | Model sends bad tool arguments | Zod validation, error returned to the model, turn cap |
 | R8 | Stretch eats the core | Checkpoints in section 6, hard cut order in D13 |
 | R9 | Mac mini k3s step overruns | Oct 20 go/no-go, one-day time box, document instead |
-| R10 | Not understanding AI-written code | You write T3.4, T3.5 and auth; delegate boilerplate only |
+| R10 | Not understanding AI-written code | Human reviews every line of T3.4, T3.5 and auth before commit; agent explains each decision (AGENTS.md section 2) |
 | R11 | Reinstall breaks the DB because of a regenerated password | Keep policy on PVCs and Secrets (D20) |
 | R12 | Real MCP clients behave differently from curl | Test Inspector and Claude Code at C2 (D26) |
 | R13 | Schedule tail (docs, video, submit) crowded into Oct 22 | Write notes progressively, rough video after C4, buffer day Oct 23 |

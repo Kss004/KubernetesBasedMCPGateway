@@ -158,6 +158,10 @@ spec:
       containers:
         - name: bootstrap
           image: wordpress:cli-2.12.0
+          # One-shot; the WooCommerce zip unpack is the peak.
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
           command: [sh, -c]
           args:
             - |

@@ -3,7 +3,17 @@ appHost: app.localhost
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.3.0"
+gatewayTag: "0.3.2"
 
 storage:
   postgres: 5Gi
+
+llm:
+  # D10: Gemini primary; Ollama fallback is e.g. baseUrl http://<host>:11434/v1
+  # with a local model name. Key is never a value: `make secrets` creates the
+  # out-of-band Secret the deployment references.
+  baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai"
+  model: "gemini-3.8-flash"
+  # Secret (key: api-key) holding the provider key; one Secret per provider
+  # so switching is a values change: llm (Gemini), llm-groq (Groq).
+  secretName: "llm"

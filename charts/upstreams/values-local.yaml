@@ -1,0 +1,7 @@
+# Local overrides (kind): image tags built + `kind load` (D16).
+mockMcp:
+  image: mock-mcp
+  tag: "0.1.0"
+everythingMcp:
+  image: everything-mcp
+  tag: "0.1.0"
