@@ -1,4 +1,4 @@
-.PHONY: help up down reset secrets seed test-netpol
+.PHONY: help up down reset secrets seed test-netpol smoke
 
 # Release/namespace names match scripts/seed.sh defaults (GW_NS, STORE_RELEASE,
 # GW_RELEASE). Image tags must stay in sync with charts/*/values.yaml.
@@ -10,7 +10,7 @@ GW_RELEASE ?= gateway
 STORE_RELEASE ?= store
 UP_RELEASE ?= upstreams
 GATEWAY_IMG ?= gateway
-GATEWAY_TAG ?= 0.3.2
+GATEWAY_TAG ?= 0.4.0
 WOO_IMG ?= woo-mcp
 WOO_TAG ?= 0.1.3
 MOCK_IMG ?= mock-mcp
@@ -60,3 +60,6 @@ seed: ## Register woo-mcp via admin API using kubectl-read token (T3.6)
 
 test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1)
 	bash scripts/test-netpol.sh
+
+smoke: ## Live checks after a deploy (dashboard, auth, upstreams, storefront)
+	bash scripts/smoke.sh

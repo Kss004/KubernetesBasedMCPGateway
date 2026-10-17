@@ -108,14 +108,14 @@ const send = (res: http.ServerResponse, status: number, body: unknown) => {
 };
 const errStatus = (e: unknown): number => (e as { status?: number }).status ?? 500;
 
-// P5 dashboard: static files, no build step (apps/dashboard/public).
+// P5 dashboard: React build output (apps/dashboard/dist, fixed file names).
 // Preloaded once; exact paths only (no join from the URL, no traversal).
 // Prod image copies the dir to ./public (Dockerfile); dev resolves from the tree.
 const dashDir = (() => {
   const candidates = [
     process.env.DASHBOARD_DIR ?? '',
     'public',
-    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'dashboard', 'public'),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'dashboard', 'dist'),
   ];
   for (const d of candidates) {
     if (!d) continue;
