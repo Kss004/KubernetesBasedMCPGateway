@@ -70,6 +70,12 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             capabilities: { drop: [ALL] }
+          # The server listens only after migrations, which wait for Postgres (first
+          # install: image pull). Hold liveness off until then: up to 40 x 5s = 200s.
+          startupProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 5
+            failureThreshold: 40
           readinessProbe:
             httpGet: { path: /readyz, port: 3000 }
             periodSeconds: 5

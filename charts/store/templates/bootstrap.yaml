@@ -180,6 +180,16 @@ spec:
                 sleep 5
               done
               [ -f wp-includes/version.php ] || { echo "docroot never populated"; exit 1; }
+              # A new pod's IP can take 1-2s to enter the NetworkPolicy allow-list
+              # (kube-router on k3s), so wait for the DB before the first wp call.
+              DB_OK=no
+              for i in $(seq 1 30); do
+                if php -r 'try { [$h, $p] = explode(":", getenv("WORDPRESS_DB_HOST") . ":3306"); new mysqli($h, getenv("WORDPRESS_DB_USER"), getenv("WORDPRESS_DB_PASSWORD"), "", (int) $p); exit(0); } catch (Throwable $e) { exit(1); }'; then
+                  DB_OK=yes; break
+                fi
+                sleep 2
+              done
+              [ "$DB_OK" = yes ] || { echo "database never reachable"; exit 1; }
               if ! $WP core is-installed; then
                 $WP core install --url="{{ include "store.url" . }}" --title="Test Store" \
                   --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" \

@@ -33,7 +33,7 @@ for (let i = 1; ; i++) {
     await migrate(pool);
     break;
   } catch (e) {
-    if (i >= 10) throw e;
+    if (i >= 60) throw e; // ~3 min: covers a first-time postgres image pull
     console.error(`migrate attempt ${i} failed, retrying: ${(e as Error).message}`);
     await new Promise((r) => setTimeout(r, 3000));
   }

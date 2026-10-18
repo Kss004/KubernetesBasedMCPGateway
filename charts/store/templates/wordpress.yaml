@@ -67,12 +67,18 @@ spec:
             - name: docroot
               mountPath: /var/www/html
           resources: {{ .Values.resources.wordpress | toJson | nindent 12 }}
+          # Not "/" or wp-login.php: WordPress redirects those to the canonical URL or,
+          # with an https storeUrl, to https (FORCE_SSL_ADMIN), which the probe then
+          # follows to the pod and fails. A REST request ends in parse_request, before
+          # any redirect, works without pretty permalinks, and still loads PHP + DB.
           readinessProbe:
-            httpGet: { path: /, port: 80 }
+            httpGet: { path: "/?rest_route=/", port: 80 }
             initialDelaySeconds: 15
             periodSeconds: 10
+          # Liveness only asks "is Apache up": a DB outage should mark the pod
+          # not-ready, not restart it.
           livenessProbe:
-            httpGet: { path: /, port: 80 }
+            tcpSocket: { port: 80 }
             initialDelaySeconds: 60
             periodSeconds: 20
       volumes:
