@@ -35,8 +35,8 @@ export class UpstreamPool {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.tick().catch(() => {}), this.healthIntervalMs);
-    void this.tick().catch(() => {});
+    this.timer = setInterval(() => void this.refreshNow().catch(() => {}), this.healthIntervalMs);
+    void this.refreshNow().catch(() => {});
   }
 
   stop(): void {
@@ -50,7 +50,8 @@ export class UpstreamPool {
 
   private secrets = new Map<string, string>();
 
-  private async tick(): Promise<void> {
+  /** Re-read servers and probe now; also called right after admin server changes. */
+  async refreshNow(): Promise<void> {
     const rows = await listServers(this.pg);
     await this.refreshSecrets();
     const seen = new Set<string>();
@@ -68,6 +69,7 @@ export class UpstreamPool {
       if (!r.enabled) {
         st.status = 'Disabled';
         st.failures = 0;
+        st.skipUntil = 0; // a re-enabled server is probed at once, not after old backoff
         this.secrets.delete(r.id);
         return;
       }

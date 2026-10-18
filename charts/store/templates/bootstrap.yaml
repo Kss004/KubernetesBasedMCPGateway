@@ -50,6 +50,8 @@ data:
     update_option('permalink_structure', '/%postname%/');
     update_option('woocommerce_default_country', 'US:CA');
     update_option('woocommerce_currency', 'USD');
+    // WooCommerce 11 starts new stores in "Coming soon" mode, hiding the shop from shoppers.
+    update_option('woocommerce_coming_soon', 'no');
     $cod = get_option('woocommerce_cod_settings', array());
     $cod['enabled'] = 'yes';
     $cod['title'] = 'Cash on delivery';

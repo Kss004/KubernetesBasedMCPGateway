@@ -42,6 +42,11 @@ const upstreams = new UpstreamPool(pool, cfg.credKey);
 upstreams.start();
 const aggregator = new Aggregator(pool, cfg.credKey);
 aggregator.start();
+// After an admin server change, refresh status (pool first) and tools now, not on the next timer.
+const refreshUpstreams = async (): Promise<void> => {
+  await upstreams.refreshNow().catch(() => {});
+  await aggregator.refresh().catch(() => {});
+};
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SESSION_RAW = process.env.SESSION_SECRET ?? '';
@@ -195,18 +200,26 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         if (req.method === 'POST' && !m[1]) {
-          send(res, 201, await createServer(pool, cfg.credKey, await readJson(req)));
+          const row = await createServer(pool, cfg.credKey, await readJson(req));
+          await refreshUpstreams();
+          send(res, 201, row);
           return;
         }
         if (req.method === 'PATCH' && m[1]) {
           const row = await patchServer(pool, cfg.credKey, m[1], await readJson(req));
           if (!row) send(res, 404, { error: 'not found' });
-          else send(res, 200, row);
+          else {
+            await refreshUpstreams();
+            send(res, 200, row);
+          }
           return;
         }
         if (req.method === 'DELETE' && m[1]) {
           if (!(await deleteServer(pool, m[1]))) send(res, 404, { error: 'not found' });
-          else send(res, 200, {});
+          else {
+            await refreshUpstreams();
+            send(res, 200, {});
+          }
           return;
         }
         send(res, 405, { error: 'method not allowed' });
