@@ -1,11 +1,35 @@
-# Prod overrides (Mac mini k3s, arm64) — STUB, TODO(verify): no k3s run yet (Oct 20 go/no-go).
-# Diff vs local: domain, ingress class, storage, secrets/pull.
-appHost: TODO(verify) # e.g. app.<lan-host>.nip.io or real domain; never shop.localhost coupling
+# Prod overrides for k3s (k3d rehearsal on the PC; Mac mini or VPS later).
+# Only deltas from values.yaml. Same chart as local: config change only.
+
+# Required: set per environment, e.g. --set appHost=app.example.com
+appHost: ""
+
+ingress:
+  className: traefik # k3s bundled Traefik
+  controllerNamespace: kube-system # k3s runs Traefik here
+  controllerPodLabels: { app.kubernetes.io/name: traefik } # only Traefik, not all of kube-system
+  # TLS: create a kubernetes.io/tls Secret (cert-manager or by hand) and name it
+  # here, or leave empty when TLS terminates in front of the cluster.
+  # Not exercised on k3d (no public domain).
+  tlsSecretName: ""
+  # Drop the nginx-only annotations (Helm merges maps, so {} would keep them;
+  # null deletes a key). Traefik streams responses without buffering by default.
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: null
+    nginx.ingress.kubernetes.io/proxy-read-timeout: null
+
 images:
-  postgres: "postgres:17" # TODO(verify): must be multi-arch (linux/arm64) or GHCR mirror
-  gateway: "ghcr.io/Kss004/KubernetesBasedMCPGateway/gateway" # TODO(verify): buildx amd64+arm64
-# gatewayTag: pin the release tag used for the prod run
+  postgres: "postgres:17" # official image, multi-arch
+  # Built with docker buildx for linux/amd64,linux/arm64 and pushed to GHCR
+  # (not pushed yet). GHCR repo names must be lowercase.
+  gateway: "ghcr.io/kss004/kubernetesbasedmcpgateway/gateway"
+
 storage:
-  postgres: 5Gi # TODO(verify): k3s StorageClass name (default local-path differs)
-# Secrets: still generated in-chart; GHCR pull secret per namespace (imagePullSecret);
-# LLM key out-of-band via kubectl (never in this file). TLS: TODO(verify) cert-manager or terminate elsewhere.
+  postgres: 5Gi
+  className: local-path # k3s local-path-provisioner
+
+# Private GHCR packages: kubectl create secret docker-registry ghcr-pull ... in
+# each namespace, then: imagePullSecrets: [{ name: ghcr-pull }]
+imagePullSecrets: []
+
+# Secrets stay generated in-chart (D11). LLM key out-of-band: make secrets.

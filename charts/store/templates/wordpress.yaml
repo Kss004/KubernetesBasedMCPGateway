@@ -9,6 +9,9 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.wordpress }}
+  {{- with .Values.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -36,6 +39,9 @@ spec:
         app: wordpress
     spec:
       automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
       # No runAsNonRoot: the official wordpress image serves on :80 as root.
       containers:
         - name: wordpress
@@ -55,8 +61,8 @@ spec:
             # Site URL via config, not the database (D21): survives domain changes.
             - name: WORDPRESS_CONFIG_EXTRA
               value: |
-                define('WP_HOME', 'http://{{ .Values.storeHost }}');
-                define('WP_SITEURL', 'http://{{ .Values.storeHost }}');
+                define('WP_HOME', '{{ include "store.url" . }}');
+                define('WP_SITEURL', '{{ include "store.url" . }}');
           volumeMounts:
             - name: docroot
               mountPath: /var/www/html
@@ -79,9 +85,14 @@ kind: Ingress
 metadata:
   name: {{ .Release.Name }}-wordpress
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.tlsSecretName }}
+  tls:
+    - hosts: [{{ $.Values.storeHost | quote }}]
+      secretName: {{ . }}
+  {{- end }}
   rules:
-    - host: {{ .Values.storeHost }}
+    - host: {{ required "storeHost is required" .Values.storeHost }}
       http:
         paths:
           - path: /

@@ -1,13 +1,29 @@
 # values-local.yaml overrides storeHost only if needed; default is local.
 storeHost: shop.localhost
+# Full public URL (WP_HOME/WP_SITEURL, D21). Empty = http://<storeHost>.
+# Set it for https or a non-80 port; the Ingress host stays storeHost.
+storeUrl: ""
+
+ingress:
+  className: nginx
+  # Namespace (and optional pod labels) of the ingress controller; NetworkPolicies
+  # admit only it to the web pods.
+  controllerNamespace: ingress-nginx
+  controllerPodLabels: {}
+  tlsSecretName: "" # kubernetes.io/tls Secret in this namespace; empty = no tls block
+  annotations: {}
+
+imagePullSecrets: [] # e.g. [{ name: ghcr-pull }], created out-of-band
 
 images:
   wordpress: "wordpress:7.1.3-apache"
   mariadb: "mariadb:11.8"
+  wpCli: "wordpress:cli-2.12.0"
 
 storage:
   mariadb: 5Gi
   wordpress: 5Gi
+  className: "" # empty = cluster default StorageClass
 
 # WooCommerce exact version (T1.4 bootstrap installs this zip, never latest).
 woocommerceVersion: "11.2.1"

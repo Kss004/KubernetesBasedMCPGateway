@@ -26,6 +26,9 @@ spec:
         app: woo-mcp
     spec:
       automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile: { type: RuntimeDefault }
@@ -48,7 +51,7 @@ spec:
             - name: WP_BASE
               value: http://{{ .Release.Name }}-wordpress
             - name: WP_HOME_URL
-              value: http://{{ .Values.storeHost }}
+              value: {{ include "store.url" . }}
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 256Mi }

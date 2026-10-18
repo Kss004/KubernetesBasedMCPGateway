@@ -21,7 +21,11 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx
+              kubernetes.io/metadata.name: {{ .Values.ingress.controllerNamespace }}
+          {{- with .Values.ingress.controllerPodLabels }}
+          podSelector:
+            matchLabels: {{- toYaml . | nindent 14 }}
+          {{- end }}
       ports: [{ port: 80 }]
     - from:
         - podSelector:

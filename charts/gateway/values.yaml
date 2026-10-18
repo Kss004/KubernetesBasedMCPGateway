@@ -1,5 +1,21 @@
 appHost: app.localhost
 
+ingress:
+  className: nginx
+  # Namespace (and optional pod labels) of the ingress controller; NetworkPolicies
+  # admit only it to the web pods.
+  controllerNamespace: ingress-nginx
+  controllerPodLabels: {}
+  # Name of a kubernetes.io/tls Secret in this namespace; empty = no tls block.
+  tlsSecretName: ""
+  # Controller-specific; these keep /mcp and chat SSE streaming on ingress-nginx (T1.2).
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+
+# e.g. [{ name: ghcr-pull }]; created out-of-band with kubectl, never in values.
+imagePullSecrets: []
+
 images:
   postgres: "postgres:17"
   gateway: "gateway"
@@ -7,6 +23,7 @@ gatewayTag: "0.4.1"
 
 storage:
   postgres: 5Gi
+  className: "" # empty = cluster default StorageClass
 
 llm:
   # D10: Gemini primary; Ollama fallback is e.g. baseUrl http://<host>:11434/v1

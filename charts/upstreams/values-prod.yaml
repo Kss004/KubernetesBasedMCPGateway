@@ -1,7 +1,7 @@
-# Prod overrides — STUB, TODO(verify): no k3s run yet.
+# Prod overrides for k3s. Images built with buildx (amd64+arm64) for GHCR, not pushed yet.
 mockMcp:
-  image: ghcr.io/Kss004/KubernetesBasedMCPGateway/mock-mcp # TODO(verify): buildx push
-  tag: "0.1.0"
+  image: ghcr.io/kss004/kubernetesbasedmcpgateway/mock-mcp
 everythingMcp:
-  image: ghcr.io/Kss004/KubernetesBasedMCPGateway/everything-mcp # TODO(verify): buildx push
-  tag: "0.1.0"
+  image: ghcr.io/kss004/kubernetesbasedmcpgateway/everything-mcp
+
+imagePullSecrets: [] # [{ name: ghcr-pull }] for private GHCR packages

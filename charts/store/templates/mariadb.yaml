@@ -9,6 +9,9 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.mariadb }}
+  {{- with .Values.storage.className }}
+  storageClassName: {{ . }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -37,6 +40,9 @@ spec:
         app: mariadb
     spec:
       automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
       # No runAsNonRoot: the official mariadb image starts as root and drops
       # to mysql itself; forcing non-root breaks the entrypoint.
       containers:

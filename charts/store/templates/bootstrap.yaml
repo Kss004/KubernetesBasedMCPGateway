@@ -151,6 +151,9 @@ spec:
     spec:
       serviceAccountName: {{ .Release.Name }}-bootstrap
       automountServiceAccountToken: true # exception: this Job drives the K8s API (least-privilege Role)
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
       restartPolicy: Never
       # The wordpress:cli image runs as uid 82, but the docroot on the shared
       # PVC is owned by uid 33 (written by the wordpress image). The bootstrap
@@ -159,7 +162,7 @@ spec:
         runAsUser: 0
       containers:
         - name: bootstrap
-          image: wordpress:cli-2.12.0
+          image: {{ .Values.images.wpCli }}
           # One-shot; the WooCommerce zip unpack is the peak.
           resources:
             requests: { cpu: 100m, memory: 256Mi }
@@ -178,7 +181,7 @@ spec:
               done
               [ -f wp-includes/version.php ] || { echo "docroot never populated"; exit 1; }
               if ! $WP core is-installed; then
-                $WP core install --url="http://{{ .Values.storeHost }}" --title="Test Store" \
+                $WP core install --url="{{ include "store.url" . }}" --title="Test Store" \
                   --admin_user=admin --admin_password="$WP_ADMIN_PASSWORD" \
                   --admin_email=admin@example.com --skip-email
               fi
