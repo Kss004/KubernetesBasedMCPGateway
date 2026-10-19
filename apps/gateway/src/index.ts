@@ -22,9 +22,12 @@ import {
   mintSession,
   verifySession,
   parseCookies,
+  LoginLimiter,
+  clientIp,
 } from './session.js';
 
 const cfg = loadConfig();
+const loginLimiter = new LoginLimiter();
 const pool = createPool(cfg.pg);
 // Postgres may still be booting after a node restart; retry instead of
 // crashlooping (readiness already keeps us out of endpoints meanwhile).
@@ -352,15 +355,24 @@ const server = http.createServer(async (req, res) => {
       }
       try {
         const v = z.object({ name: z.string().min(1), password: z.string().min(1) }).parse(await readJson(req));
+        const keys = [`ip:${clientIp(req.headers['x-forwarded-for'], req.socket.remoteAddress)}`, `name:${v.name.toLowerCase()}`];
+        const wait = loginLimiter.lockedFor(keys);
+        if (wait > 0) {
+          res.setHeader('Retry-After', String(wait));
+          send(res, 429, { error: 'too many attempts, try again in a minute' });
+          return;
+        }
         const { rows } = await pool.query('SELECT id, name, role, password_hash FROM users WHERE name = $1', [v.name]);
         const u = rows[0] as { id: string; name: string; role: 'admin' | 'member'; password_hash: string | null } | undefined;
         const okLogin = u?.password_hash
           ? await checkPassword(v.password, u.password_hash)
           : await checkPasswordDummy(v.password).then(() => false);
         if (!u || !okLogin) {
+          loginLimiter.fail(keys);
           send(res, 401, { error: 'invalid credentials' });
           return;
         }
+        loginLimiter.success(keys[1]);
         const token = mintSession(u.id, SESSION_SECRET);
         res.writeHead(200, {
           'Content-Type': 'application/json',
