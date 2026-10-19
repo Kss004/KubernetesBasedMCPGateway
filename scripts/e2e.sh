@@ -57,7 +57,7 @@ GOT=$(mcp woo__get_order "{\"id\":${OID:-0}}")
 echo "$GOT" | grep -q "$NAME" && pass "/mcp woo__get_order $OID shows the product" || fail "/mcp woo__get_order: $(echo "$GOT" | head -c 300)"
 
 REV=$(curl -s -X POST "http://$APP/api/keys/$KEY_ID/revoke" -H "$AH" | json "o.revoked")
-[ "$REV" = true ] && pass "e2e key revoked" || fail "e2e key revoke"
+[ "$REV" = true ] && { pass "e2e key revoked"; trap - EXIT; } || fail "e2e key revoke"
 CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://$APP/mcp" -H "Authorization: Bearer $KEY" \
   -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 [ "$CODE" = 401 ] && pass "revoked key gets 401" || fail "revoked key got $CODE"
