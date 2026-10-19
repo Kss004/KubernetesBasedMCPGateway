@@ -50,5 +50,15 @@ namespace; gateway has no RBAC into other namespaces (Secrets map, §4).
   - A legitimate repeat of earlier data, with no new tool call, can get the nudge and
     then the "couldn't look that up" fallback.
   The audit log stays the source of truth: every real tool call has a row.
+- **Login lockout can be used against a user (bug 6, E2E N6).** The limiter locks a user
+  name after 5 failures in 15 min, so anyone who knows a name can keep that account locked
+  out, one minute at a time. A successful login clears only the name key, not the IP key.
+  - The IP key is the last `X-Forwarded-For` hop. On kind every local client arrives as
+    `172.18.0.1`, so one lockout blocks all local logins for 1 min.
+  - Unverified for prod: on k3s with Traefik behind klipper-lb, the last hop may be a node
+    or load-balancer address (source NAT) unless the Traefik Service uses
+    `externalTrafficPolicy: Local` or Traefik is set to trust forwarded headers. Then the IP
+    lock is effectively global in prod too. Check it on the target before relying on it.
+  - The counters are in memory, per gateway pod (`// ponytail:` in `session.ts`).
 - **ingress-nginx archived upstream (read-only since Mar 2026)** — accepted for a
   2-week project; switch cost recorded in `docs/versions.md`.
