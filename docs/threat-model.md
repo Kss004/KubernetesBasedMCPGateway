@@ -40,5 +40,15 @@ namespace; gateway has no RBAC into other namespaces (Secrets map, §4).
   per-incident handling, not prevention claims.
 - **Member-vs-member:** members see only their own audit rows (D22); no
   per-tool grants yet (T11.1 stretch) — today a member can call any enabled tool.
+- **Chat can still state wrong store data in some cases (D28).** The gateway guard
+  (`driveLoop` in `apps/gateway/src/chat.ts`) blocks a reply that shows order numbers or
+  money when no tool ran for the question. Its limits:
+  - It is skipped once any tool ran in the request. A reply after `get_order` that
+    invents other orders is not caught.
+  - It only matches `#N`, `$`/`€`/`£` amounts and `N.NN`. Plain integers ("3 orders",
+    "Order 39", "USD 25") pass.
+  - A legitimate repeat of earlier data, with no new tool call, can get the nudge and
+    then the "couldn't look that up" fallback.
+  The audit log stays the source of truth: every real tool call has a row.
 - **ingress-nginx archived upstream (read-only since Mar 2026)** — accepted for a
   2-week project; switch cost recorded in `docs/versions.md`.
