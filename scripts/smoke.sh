@@ -30,7 +30,7 @@ check "every enabled upstream is Connected" bash -c "[ \$(echo '$UPS' | grep -c 
 SRV_CODE=$(curl -s -o /tmp/smoke-servers.$$ -w '%{http_code}' "http://$APP/api/servers" -H "Authorization: Bearer $TOKEN")
 check "upstream credentials never returned" bash -c "[ '$SRV_CODE' = 200 ] && grep -q '\"slug\"' /tmp/smoke-servers.$$ && ! grep -qi '\"secret\"\\|enc_secret' /tmp/smoke-servers.$$"
 rm -f /tmp/smoke-servers.$$
-check "/mcp 401 sends WWW-Authenticate" bash -c "curl -s -o /dev/null -D - -X POST http://$APP/mcp -H 'Content-Type: application/json' -d '{}' | grep -qi '^www-authenticate: bearer'"
+check "/mcp 401 sends WWW-Authenticate" bash -c "curl -s -o /dev/null -D - -X POST http://$APP/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | grep -qi '^www-authenticate: bearer'"
 check "dashboard is served no-cache" bash -c "curl -s -o /dev/null -D - http://$APP/ | grep -qi '^cache-control: no-cache'"
 check "storefront responds" test "$(code "http://$SHOP/")" = 200
 unset TOKEN
