@@ -74,7 +74,11 @@ async function sessionUser(req: http.IncomingMessage): Promise<SessionUser | nul
   if (!token) return null;
   const v = verifySession(token, SESSION_SECRET);
   if (!v) return null;
-  const { rows } = await pool.query('SELECT id, name, role FROM users WHERE id = $1', [v.userId]);
+  // The version check is what makes logout and a password reset end earlier sessions (bug 6).
+  const { rows } = await pool.query('SELECT id, name, role FROM users WHERE id = $1 AND session_version = $2', [
+    v.userId,
+    v.version,
+  ]);
   return rows[0] ?? null;
 }
 // Admin via bootstrap token (scripts) or an admin session (dashboard).
@@ -303,7 +307,8 @@ const server = http.createServer(async (req, res) => {
         const mp = /^\/api\/users\/([0-9a-f-]{36})\/password$/.exec(req.url ?? '');
         if (req.method === 'POST' && mp) {
           const v = z.object({ password: z.string().min(8).max(256) }).parse(await readJson(req));
-          const { rowCount } = await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [
+          // A new password also ends the user's existing sessions (bug 6).
+          const { rowCount } = await pool.query('UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2', [
             await hashPassword(v.password),
             mp[1],
           ]);
@@ -364,8 +369,8 @@ const server = http.createServer(async (req, res) => {
           send(res, 429, { error: 'too many attempts, try again in a minute' });
           return;
         }
-        const { rows } = await pool.query('SELECT id, name, role, password_hash FROM users WHERE name = $1', [v.name]);
-        const u = rows[0] as { id: string; name: string; role: 'admin' | 'member'; password_hash: string | null } | undefined;
+        const { rows } = await pool.query('SELECT id, name, role, password_hash, session_version FROM users WHERE name = $1', [v.name]);
+        const u = rows[0] as { id: string; name: string; role: 'admin' | 'member'; password_hash: string | null; session_version: number } | undefined;
         const okLogin = u?.password_hash
           ? await checkPassword(v.password, u.password_hash)
           : await checkPasswordDummy(v.password).then(() => false);
@@ -375,7 +380,7 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         loginLimiter.success(keys[1]);
-        const token = mintSession(u.id, SESSION_SECRET);
+        const token = mintSession(u.id, u.session_version, SESSION_SECRET);
         res.writeHead(200, {
           'Content-Type': 'application/json',
           'Set-Cookie': `session=${encodeURIComponent(token)}; ${COOKIE_FLAGS}; Max-Age=604800`,
@@ -387,6 +392,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/api/logout' && req.method === 'POST') {
+      // Bump the version so a copied cookie stops working, not just this browser's copy.
+      // Trade-off: ends all of this user's sessions (every device). Bug 6.
+      const v = SESSION_SECRET ? verifySession(parseCookies(req.headers.cookie).session ?? '', SESSION_SECRET) : null;
+      if (v)
+        await pool.query('UPDATE users SET session_version = session_version + 1 WHERE id = $1 AND session_version = $2', [
+          v.userId,
+          v.version,
+        ]);
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Set-Cookie': `session=; ${COOKIE_FLAGS}; Max-Age=0`,

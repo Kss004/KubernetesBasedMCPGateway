@@ -12,30 +12,33 @@ export const checkPassword = (pw: string, hash: string): Promise<boolean> => bcr
 const DUMMY = '$2b$10$C6UzMDM.H6dfI/f/IKc8OOuDvDvDvDvDvDvDvDvDvDvDvDvDvDvD.';
 export const checkPasswordDummy = (pw: string): Promise<boolean> => bcrypt.compare(pw, DUMMY);
 
-const PREFIX = 'v1';
+// v2 adds the user's session_version (bug 6: logout ends the session server-side).
+// v1 tokens no longer verify, so the deploy logs everyone out once.
+const PREFIX = 'v2';
 
-export function mintSession(userId: string, secret: Buffer, ttlMs = 7 * 24 * 3600 * 1000): string {
+export function mintSession(userId: string, version: number, secret: Buffer, ttlMs = 7 * 24 * 3600 * 1000): string {
   const exp = Date.now() + ttlMs;
-  const body = `${PREFIX}.${userId}.${exp}`;
+  const body = `${PREFIX}.${userId}.${version}.${exp}`;
   const sig = createHmac('sha256', secret).update(body).digest('base64url');
   return `${body}.${sig}`;
 }
 
-export function verifySession(token: string, secret: Buffer): { userId: string } | null {
+export function verifySession(token: string, secret: Buffer): { userId: string; version: number } | null {
   const parts = token.split('.');
-  if (parts.length !== 4 || parts[0] !== PREFIX) return null;
-  const exp = Number(parts[2]);
-  if (!Number.isFinite(exp) || exp < Date.now()) return null;
-  const body = `${PREFIX}.${parts[1]}.${parts[2]}`;
+  if (parts.length !== 5 || parts[0] !== PREFIX) return null;
+  const version = Number(parts[2]);
+  const exp = Number(parts[3]);
+  if (!Number.isInteger(version) || !Number.isFinite(exp) || exp < Date.now()) return null;
+  const body = `${PREFIX}.${parts[1]}.${parts[2]}.${parts[3]}`;
   const want = createHmac('sha256', secret).update(body).digest();
   let got: Buffer;
   try {
-    got = Buffer.from(parts[3], 'base64url');
+    got = Buffer.from(parts[4], 'base64url');
   } catch {
     return null;
   }
   if (got.length !== want.length || !timingSafeEqual(got, want)) return null;
-  return { userId: parts[1] };
+  return { userId: parts[1], version };
 }
 
 export function parseCookies(header: string | undefined): Record<string, string> {

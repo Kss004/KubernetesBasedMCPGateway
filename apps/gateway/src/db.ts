@@ -72,6 +72,12 @@ const MIGRATIONS: Migration[] = [
     version: 4,
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;`,
   },
+  {
+    // Bug 6: logout invalidation. Session tokens carry this number; logout and a password
+    // reset bump it, so every earlier token for the user stops working.
+    version: 5,
+    sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version int NOT NULL DEFAULT 0;`,
+  },
 ];
 
 export function createPool(pg: {
