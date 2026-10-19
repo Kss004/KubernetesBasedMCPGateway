@@ -1,7 +1,7 @@
 // Gateway entry: config, migrations, /healthz, /readyz, admin server
 // registry + users/keys, session login, audit, aggregated /mcp.
 import http from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,7 +132,7 @@ const dashDir = (() => {
   }
   return null;
 })();
-const dashFiles = new Map<string, { buf: Buffer; type: string }>();
+const dashFiles = new Map<string, { buf: Buffer; type: string; etag: string }>();
 if (dashDir) {
   const entries: Array<[string, string, string]> = [
     ['/', 'index.html', 'text/html; charset=utf-8'],
@@ -142,7 +142,8 @@ if (dashDir) {
   ];
   for (const [url, file, type] of entries) {
     try {
-      dashFiles.set(url, { buf: fs.readFileSync(path.join(dashDir, file)), type });
+      const buf = fs.readFileSync(path.join(dashDir, file));
+      dashFiles.set(url, { buf, type, etag: `"${createHash('sha256').update(buf).digest('hex').slice(0, 16)}"` });
     } catch {
       // leave unmapped; GET / then 503s instead of serving a partial app
     }
@@ -453,8 +454,10 @@ const server = http.createServer(async (req, res) => {
     const dashPath = (req.url ?? '').split('?')[0];
     if (req.method === 'GET' && dashFiles.has(dashPath)) {
       const f = dashFiles.get(dashPath)!;
-      res.writeHead(200, { 'Content-Type': f.type });
-      res.end(f.buf);
+      // Fixed file names: no-cache + ETag so a redeploy is picked up at once (E2E L10), 304 otherwise.
+      const h = { 'Content-Type': f.type, 'Cache-Control': 'no-cache', ETag: f.etag };
+      if (req.headers['if-none-match'] === f.etag) res.writeHead(304, h).end();
+      else res.writeHead(200, h).end(f.buf);
       return;
     }
     if (req.method === 'GET' && (dashPath === '/' || dashPath === '/index.html') && !dashFiles.has('/')) {
