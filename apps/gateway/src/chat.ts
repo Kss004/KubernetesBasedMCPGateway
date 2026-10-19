@@ -170,6 +170,18 @@ export async function chatCompletions(
   return { content: typeof msg.content === 'string' ? msg.content : '', toolCalls };
 }
 
+// E2E H1 guard: prompts alone did not stop qwen3.8-27b from inventing orders on follow-up
+// turns (2 of 4 runs). A reply that shows store data (order numbers, money) while no tool ran
+// in this request never reaches the user: the model is told once to call the tool, and if it
+// still does not, the user gets FALLBACK. Deterministic, unlike the prompt.
+const STORE_DATA = /#\d+|[$€£]\s?\d+(?:[.,]\d+)?|\b\d+[.,]\d{2}\b/g;
+// Tokens the user typed themselves ("priced $1.00") are echoes, not invented data.
+export const looksLikeStoreData = (text: string, userText = ''): boolean =>
+  (text.match(STORE_DATA) ?? []).some((tok) => !userText.includes(tok));
+export const NUDGE =
+  'Your last answer stated store data without calling a tool in this reply. Call the matching tool now and answer only from its result.';
+export const FALLBACK = "I couldn't look that up with the store tools. Please ask again.";
+
 export async function driveLoop(deps: {
   messages: LlmMessage[];
   callLlm: (messages: LlmMessage[]) => Promise<LlmTurn>;
@@ -178,13 +190,27 @@ export async function driveLoop(deps: {
   maxTurns?: number;
 }): Promise<void> {
   const max = deps.maxTurns ?? MAX_TURNS;
+  let toolsRan = false;
+  let nudged = false;
+  const lastUser = [...deps.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   for (let turn = 1; turn <= max; turn++) {
     const { content, toolCalls } = await deps.callLlm(deps.messages);
     if (toolCalls.length === 0) {
+      if (!toolsRan && looksLikeStoreData(content, typeof lastUser === 'string' ? lastUser : '')) {
+        if (!nudged) {
+          nudged = true;
+          deps.messages.push({ role: 'assistant', content }, { role: 'user', content: NUDGE });
+          continue;
+        }
+        deps.emit('text', { content: FALLBACK });
+        deps.emit('done', { turns: turn });
+        return;
+      }
       if (content) deps.emit('text', { content });
       deps.emit('done', { turns: turn });
       return;
     }
+    toolsRan = true;
     if (content) deps.emit('text', { content });
     deps.messages.push({
       role: 'assistant',

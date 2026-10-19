@@ -10,6 +10,9 @@ import {
   chatCompletions,
   handleChat,
   MAX_TURNS,
+  NUDGE,
+  FALLBACK,
+  looksLikeStoreData,
   type LlmMessage,
   type LlmTurn,
 } from '../src/chat.ts';
@@ -289,5 +292,55 @@ describe('E2E round 1 fixes', () => {
       /rate-limited, try again in a few seconds/,
     );
     assert.equal(calls, 2);
+  });
+});
+
+describe('H1 guard: no store data without a tool in this request (E2E round 2)', () => {
+  const run = async (script: LlmTurn[], user = 'What orders came in today?') => {
+    const messages: LlmMessage[] = [
+      { role: 'system', content: 's' },
+      { role: 'user', content: 'Get the details of order 26' },
+      { role: 'assistant', content: 'Order #26: Test Lamp, $20.00, processing.' },
+      { role: 'user', content: user },
+    ];
+    const events: Array<[string, unknown]> = [];
+    let i = 0;
+    const tools: string[] = [];
+    await driveLoop({
+      messages,
+      callLlm: async () => script[i++],
+      callTool: async (name) => (tools.push(name), { ok: true, text: '[]' }),
+      emit: (e, d) => events.push([e, d]),
+    });
+    const text = events.filter(([e]) => e === 'text').map(([, d]) => (d as { content: string }).content);
+    return { text, calls: i, tools, messages };
+  };
+  const say = (content: string): LlmTurn => ({ content, toolCalls: [] });
+  const call = (name: string): LlmTurn => ({ content: '', toolCalls: [{ id: 't1', name, argsText: '{}' }] });
+
+  it('the round 2 repro: invented orders are never shown; one nudge, then the tool runs', async () => {
+    const r = await run([say('3 orders today: #25 $10000.00 Test Lamp, #31 $30.00'), call('woo__list_orders'), say('1 order today: #26 $20.00')]);
+    assert.deepEqual(r.text, ['1 order today: #26 $20.00']);
+    assert.deepEqual(r.tools, ['woo__list_orders']);
+    assert.equal(r.messages.find((m) => m.content === NUDGE)?.role, 'user');
+  });
+
+  it('if the model still answers without a tool, the user gets the fallback, not the data', async () => {
+    const r = await run([say('#25 $10000.00'), say('#31 $30.00 again')]);
+    assert.deepEqual(r.text, [FALLBACK]);
+    assert.equal(r.calls, 2);
+  });
+
+  it('replies with no store data, or only echoes of the user text, pass untouched', async () => {
+    assert.deepEqual((await run([say('Which day do you mean?')])).text, ['Which day do you mean?']);
+    const echo = await run([say('I cannot create products priced $1.00.')], 'Create a product called Hack Mug priced $1.00');
+    assert.deepEqual(echo.text, ['I cannot create products priced $1.00.']);
+    assert.equal(looksLikeStoreData('order #12 for $5', 'order #12 for $5'), false);
+    assert.equal(looksLikeStoreData('order #13', 'order #12'), true);
+  });
+
+  it('after a tool ran in this request, data in the answer is allowed', async () => {
+    const r = await run([call('woo__list_orders'), say('#26 $20.00 Test Lamp')]);
+    assert.deepEqual(r.text, ['#26 $20.00 Test Lamp']);
   });
 });
