@@ -74,6 +74,8 @@ describe('UpstreamPool outage detection (E2E M3)', () => {
   });
 });
 
+// Bounds are loose (5s vs 300-400ms timeouts) so a loaded machine cannot flake them; the bug
+// they guard against took 13-65s (E2E round 5/7 flake reports).
 describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
   it('a probe and a tool call to an upstream that never answers fail at our timeout', async () => {
     const http = await import('node:http');
@@ -86,12 +88,12 @@ describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
     try {
       let t0 = Date.now();
       await pool.refreshNow();
-      assert.ok(Date.now() - t0 < 1500, `probe took ${Date.now() - t0}ms`);
+      assert.ok(Date.now() - t0 < 5000, `probe took ${Date.now() - t0}ms`);
       // Force Connected so callTool reaches the upstream, then expect our 400ms timeout.
       (pool as unknown as { states: Map<string, { status: string }> }).states.get('s1')!.status = 'Connected';
       t0 = Date.now();
       await assert.rejects(pool.callTool('s1', 'x', {}, 400), /upstream timeout after 400ms/);
-      assert.ok(Date.now() - t0 < 1500, `call took ${Date.now() - t0}ms`);
+      assert.ok(Date.now() - t0 < 5000, `call took ${Date.now() - t0}ms`);
     } finally {
       hang.closeAllConnections();
       hang.close();
@@ -112,7 +114,7 @@ describe('Aggregator tool refresh timeout (E2E M3)', () => {
     try {
       const t0 = Date.now();
       await agg.refresh();
-      assert.ok(Date.now() - t0 < 1500, `refresh took ${Date.now() - t0}ms`);
+      assert.ok(Date.now() - t0 < 5000, `refresh took ${Date.now() - t0}ms`);
     } finally {
       hang.closeAllConnections();
       hang.close();
