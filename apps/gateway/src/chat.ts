@@ -35,10 +35,15 @@ export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {
 export function buildSystemPrompt(now = new Date()): string {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   return [
-    'You are the store assistant. Answer with plain text, never raw HTML.',
+    'You are the store assistant.',
+    'Format: plain text only. No markdown (no ** or #, no tables), never raw HTML. For lists, one item per line starting with "- ".',
     `Current date: ${now.toISOString().slice(0, 10)}. Timezone: ${tz}. Local time: ${now.toString()}.`,
     'For "today" questions pass after=<day>T00:00:00 and before=<day>T23:59:59 to list_orders.',
-    'Use tools when needed; keep each reply short and factual.',
+    // E2E H1: on follow-up turns the model copied store data from earlier replies (history
+    // carries no tool results) instead of calling a tool, and invented orders.
+    'Store facts (orders, products, prices, totals, stock, statuses, customers) must come only from tool results in this reply.',
+    'For every question about them, call the matching tool now, even if earlier messages mention the same data. Never reuse, guess or invent them.',
+    'If a tool fails or returns nothing, say so plainly. Keep each reply short and factual.',
   ].join('\n');
 }
 
@@ -121,20 +126,29 @@ export async function chatCompletions(
 ): Promise<LlmTurn> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   let resp: Response;
-  try {
-    resp = await fetchImpl(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-      body: JSON.stringify({
-        model: cfg.model,
-        messages,
-        ...(llmTools.length > 0 ? { tools: llmTools, tool_choice: 'auto' } : {}),
-      }),
-      signal: AbortSignal.timeout(60000),
-    });
-  } catch (e) {
-    throw Object.assign(new Error(`llm unreachable: ${(e as Error).message}`), { status: 502 });
+  // shortcut: one retry on 429, waiting retry-after (seconds, capped at 10s; 1s if absent
+  // or a date). No retry library by rule; add backoff with jitter if limits bite in prod.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      resp = await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+        body: JSON.stringify({
+          model: cfg.model,
+          messages,
+          ...(llmTools.length > 0 ? { tools: llmTools, tool_choice: 'auto' } : {}),
+        }),
+        signal: AbortSignal.timeout(60000),
+      });
+    } catch (e) {
+      throw Object.assign(new Error(`llm unreachable: ${(e as Error).message}`), { status: 502 });
+    }
+    if (resp.status !== 429 || attempt > 0) break;
+    const s = Number(resp.headers.get('retry-after'));
+    await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 1000, 10000)));
   }
+  if (resp.status === 429)
+    throw Object.assign(new Error('the model is rate-limited, try again in a few seconds'), { status: 429 });
   if (!resp.ok) throw Object.assign(new Error(`llm ${resp.status}`), { status: 502 });
   const json = (await resp.json()) as {
     choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
@@ -237,6 +251,7 @@ export async function handleChat(opts: {
     gone = !res.writableEnded;
   });
   const fail = async (name: string, serverSlug: string, errorClass: string, error: string, durationMs = 0, outcome: 'error' | 'denied' = 'error') => {
+    console.error(`chat tool ${outcome}: user=${opts.user.name} tool=${name} class=${errorClass} error=${error}`);
     await logCall(opts.pg, {
       userId: opts.user.id,
       keyId: null,
@@ -293,7 +308,9 @@ export async function handleChat(opts: {
       emit,
     });
   } catch (e) {
-    emit('error', { message: (e as Error).message ?? 'chat failed' });
+    const message = (e as Error).message ?? 'chat failed';
+    if (message !== 'client disconnected') console.error(`chat failed: user=${opts.user.name} error=${message}`);
+    emit('error', { message });
   }
   res.end();
 }

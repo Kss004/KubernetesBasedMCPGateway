@@ -261,3 +261,33 @@ describe('handleChat permissions (bug 1)', () => {
     assert.equal(audit[0][4], 'denied');
   });
 });
+
+describe('E2E round 1 fixes', () => {
+  it('H1/L5: prompt forces fresh tool calls for store facts and plain text', () => {
+    const p = buildSystemPrompt();
+    assert.match(p, /must come only from tool results in this reply/);
+    assert.match(p, /call the matching tool now, even if earlier messages mention/);
+    assert.match(p, /No markdown/);
+  });
+
+  const cfg = { baseUrl: 'https://llm.test/v1', model: 'm', apiKey: 'k' };
+  const ok = () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: 'hi' } }] }), { status: 200 });
+  const limited = () => new Response('{}', { status: 429, headers: { 'retry-after': '0' } });
+
+  it('M2: retries a 429 once, honoring retry-after', async () => {
+    let calls = 0;
+    const turn = await chatCompletions([], [], cfg, (async () => (++calls === 1 ? limited() : ok())) as typeof fetch);
+    assert.equal(calls, 2);
+    assert.equal(turn.content, 'hi');
+  });
+
+  it('M2: a second 429 gives a friendly rate-limit error, no third call', async () => {
+    let calls = 0;
+    await assert.rejects(
+      chatCompletions([], [], cfg, (async () => (calls++, limited())) as typeof fetch),
+      /rate-limited, try again in a few seconds/,
+    );
+    assert.equal(calls, 2);
+  });
+});
