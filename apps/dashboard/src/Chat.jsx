@@ -24,9 +24,11 @@ export default function Chat() {
     if (!text || busy) return;
     setInput('');
     setBusy(true);
-    const history = [...msgs.filter((m) => m.content).map(({ role, content }) => ({ role, content })), { role: 'user', content: text }];
+    // Display keeps each message's tool chips; the request sends only role + content (E2E L4).
+    const shown = [...msgs, { role: 'user', content: text }];
+    const history = shown.filter((m) => m.content).map(({ role, content }) => ({ role, content }));
     const reply = { role: 'assistant', content: '', tools: [] };
-    const update = () => setMsgs([...history, { ...reply, tools: [...reply.tools] }]);
+    const update = () => setMsgs([...shown, { ...reply, tools: [...reply.tools] }]);
     update();
     try {
       const res = await fetch('/api/chat', {
