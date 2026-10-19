@@ -60,5 +60,10 @@ namespace; gateway has no RBAC into other namespaces (Secrets map, §4).
     `externalTrafficPolicy: Local` or Traefik is set to trust forwarded headers. Then the IP
     lock is effectively global in prod too. Check it on the target before relying on it.
   - The counters are in memory, per gateway pod (`// ponytail:` in `session.ts`).
+- **What a member can see through the store tools (E2E round 5).** Members may call
+  `woo__get_order`, which returns the customer's name and billing/shipping address (an
+  allowlist: no email, phone, IP or `order_key`). Order details are store data a member
+  needs for support, so this is by design; restrict `get_order` in the member deny list
+  (`router.ts`, `grantsAllow`) if members must not see addresses.
 - **ingress-nginx archived upstream (read-only since Mar 2026)** — accepted for a
   2-week project; switch cost recorded in `docs/versions.md`.
