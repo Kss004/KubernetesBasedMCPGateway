@@ -138,8 +138,8 @@ function UserRow({ u, setStatus, onCreateKey }) {
         <span className="pill">{u.role}</span>
       </td>
       <td className="row">
-        <input type="password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="one-time password" autoComplete="new-password" />
-        <button onClick={setPassword} disabled={!pw}>
+        <input type="password" minLength={8} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="one-time password" autoComplete="new-password" />
+        <button onClick={setPassword} disabled={pw.length < 8} title="At least 8 characters">
           Set
         </button>
       </td>
