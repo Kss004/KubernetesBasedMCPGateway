@@ -441,15 +441,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const dashPath = (req.url ?? '').split('?')[0];
-    if (req.method === 'GET' && dashFiles.has(dashPath)) {
+    const getOrHead = req.method === 'GET' || req.method === 'HEAD'; // E2E N1: HEAD returned 404
+    if (getOrHead && dashFiles.has(dashPath)) {
       const f = dashFiles.get(dashPath)!;
       // Fixed file names: no-cache + ETag so a redeploy is picked up at once (E2E L10), 304 otherwise.
       const h = { 'Content-Type': f.type, 'Cache-Control': 'no-cache', ETag: f.etag };
       if (req.headers['if-none-match'] === f.etag) res.writeHead(304, h).end();
-      else res.writeHead(200, h).end(f.buf);
+      else res.writeHead(200, { ...h, 'Content-Length': f.buf.length }).end(req.method === 'HEAD' ? undefined : f.buf);
       return;
     }
-    if (req.method === 'GET' && (dashPath === '/' || dashPath === '/index.html') && !dashFiles.has('/')) {
+    if (getOrHead && (dashPath === '/' || dashPath === '/index.html') && !dashFiles.has('/')) {
       res.writeHead(503, { 'Content-Type': 'application/json' }).end('{"error":"dashboard not built"}');
       return;
     }
