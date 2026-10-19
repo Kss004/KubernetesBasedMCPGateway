@@ -31,7 +31,7 @@ woocommerceVersion: "11.2.1"
 # woo-mcp image (T2.4): built locally, loaded with kind load (D16).
 wooMcp:
   image: woo-mcp
-  tag: "0.1.3"
+  tag: "0.1.4"
 
 resources:
   mariadb:

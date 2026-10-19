@@ -1,8 +1,8 @@
 mockMcp:
   image: mock-mcp
-  tag: "0.1.0"
+  tag: "0.1.1"
 everythingMcp:
   image: everything-mcp
-  tag: "0.1.0"
+  tag: "0.1.1"
 
 imagePullSecrets: [] # e.g. [{ name: ghcr-pull }], created out-of-band

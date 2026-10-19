@@ -10,13 +10,13 @@ GW_RELEASE ?= gateway
 STORE_RELEASE ?= store
 UP_RELEASE ?= upstreams
 GATEWAY_IMG ?= gateway
-GATEWAY_TAG ?= 0.4.2
+GATEWAY_TAG ?= 0.4.5
 WOO_IMG ?= woo-mcp
-WOO_TAG ?= 0.1.3
+WOO_TAG ?= 0.1.4
 MOCK_IMG ?= mock-mcp
-MOCK_TAG ?= 0.1.0
+MOCK_TAG ?= 0.1.1
 EVERYTHING_IMG ?= everything-mcp
-EVERYTHING_TAG ?= 0.1.0
+EVERYTHING_TAG ?= 0.1.1
 IMAGES = $(GATEWAY_IMG):$(GATEWAY_TAG) $(WOO_IMG):$(WOO_TAG) $(MOCK_IMG):$(MOCK_TAG) $(EVERYTHING_IMG):$(EVERYTHING_TAG)
 
 # Prod rehearsal on k3d (values-prod.yaml: Traefik, local-path). Own kubeconfig
