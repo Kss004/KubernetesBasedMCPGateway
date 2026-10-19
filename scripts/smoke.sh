@@ -31,6 +31,7 @@ SRV_CODE=$(curl -s -o /tmp/smoke-servers.$$ -w '%{http_code}' "http://$APP/api/s
 check "upstream credentials never returned" bash -c "[ '$SRV_CODE' = 200 ] && grep -q '\"slug\"' /tmp/smoke-servers.$$ && ! grep -qi '\"secret\"\\|enc_secret' /tmp/smoke-servers.$$"
 rm -f /tmp/smoke-servers.$$
 check "/mcp 401 sends WWW-Authenticate" bash -c "curl -s -o /dev/null -D - -X POST http://$APP/mcp -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | grep -qi '^www-authenticate: bearer'"
+check "security headers on / (CSP, frame, nosniff, referrer)" bash -c "H=\$(curl -s -o /dev/null -D - http://$APP/); for h in \"content-security-policy: default-src 'self'\" 'x-frame-options: deny' 'x-content-type-options: nosniff' 'referrer-policy: no-referrer'; do echo \"\$H\" | grep -qi \"^\$h\" || exit 1; done"
 check "dashboard is served no-cache" bash -c "curl -s -o /dev/null -D - http://$APP/ | grep -qi '^cache-control: no-cache'"
 check "storefront responds" test "$(code "http://$SHOP/")" = 200
 unset TOKEN

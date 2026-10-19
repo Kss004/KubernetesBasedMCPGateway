@@ -152,7 +152,18 @@ if (dashDir) {
   }
 }
 
+// Bug 6: security headers on every response (dashboard, API, /mcp). The Vite build has no
+// inline scripts or styles and loads nothing cross-origin, so CSP needs no exceptions;
+// React style props go through the CSSOM, which CSP does not block.
+const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': "default-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
+
 const server = http.createServer(async (req, res) => {
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
   try {
     if (req.method === 'GET' && req.url === '/healthz') {
       res.writeHead(200).end('ok');
