@@ -65,6 +65,18 @@ export const orderDetail = (o: WOrder & {
   shipping: addr(o.shipping),
 });
 
+// E2E round 5 bug 1: the model added up order totals itself and got them wrong every time.
+// Return the count and total computed here (in cents, so no float drift) next to the orders.
+export const orderSummary = (orders: WOrder[], perPage: number) => {
+  const cents = orders.reduce((sum, o) => sum + Math.round(Number(o.total) * 100), 0);
+  return {
+    count: orders.length,
+    total: (cents / 100).toFixed(2),
+    complete: orders.length < perPage, // false: there may be more pages
+    orders: orders.map(slimOrder),
+  };
+};
+
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
 
 export function registerTools(server: McpServer, cfg: WooConfig): void {
@@ -118,7 +130,8 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
   server.registerTool(
     'list_orders',
     {
-      description: 'List orders, filterable by date range and status.',
+      description:
+        'List orders, filterable by date range and status. Returns count and total (sum of order totals) for the returned orders; complete=false means more pages exist.',
       inputSchema: {
         after: z.string().optional(),
         before: z.string().optional(),
@@ -127,16 +140,17 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
         per_page: z.number().int().min(1).max(100).optional(),
       },
     },
-    async (args) =>
-      text(
-        ((await wooRequest<WOrder[]>(cfg, 'GET', '/wp-json/wc/v3/orders', {
-          ...(args.after ? { after: args.after } : {}),
-          ...(args.before ? { before: args.before } : {}),
-          ...(args.status ? { status: args.status } : {}),
-          page: String(args.page ?? 1),
-          per_page: String(args.per_page ?? 20),
-        })) as WOrder[]).map(slimOrder),
-      ),
+    async (args) => {
+      const perPage = args.per_page ?? 100; // a whole day in one page, so count and total cover it
+      const orders = (await wooRequest<WOrder[]>(cfg, 'GET', '/wp-json/wc/v3/orders', {
+        ...(args.after ? { after: args.after } : {}),
+        ...(args.before ? { before: args.before } : {}),
+        ...(args.status ? { status: args.status } : {}),
+        page: String(args.page ?? 1),
+        per_page: String(perPage),
+      })) as WOrder[];
+      return text(orderSummary(orders, perPage));
+    },
   );
 
   server.registerTool(

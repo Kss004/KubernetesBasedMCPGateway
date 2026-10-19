@@ -47,3 +47,17 @@ describe('orderDetail (E2E L12)', () => {
     assert.equal(out.total, '20.00');
   });
 });
+
+describe('orderSummary (E2E round 5 bug 1)', () => {
+  it('returns an exact count and total, in cents, with a completeness flag', async () => {
+    const { orderSummary } = await import('../src/tools.ts');
+    const o = (id: number, total: string) => ({ id, status: 'processing', total, date_created: 'x' });
+    const orders = [...Array.from({ length: 12 }, (_, i) => o(i + 1, '9.99')), o(13, '20.00'), o(14, '21.50')];
+    const s = orderSummary(orders, 100);
+    assert.equal(s.count, 14);
+    assert.equal(s.total, '161.38'); // 12 x 9.99 + 20.00 + 21.50, the round 5 true total
+    assert.equal(s.complete, true);
+    assert.equal(s.orders.length, 14);
+    assert.equal(orderSummary(orders.slice(0, 2), 2).complete, false);
+  });
+});

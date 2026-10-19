@@ -58,6 +58,7 @@ export function buildSystemPrompt(now = new Date(), tzName = process.env.STORE_T
     // carries no tool results) instead of calling a tool, and invented orders.
     'Store facts (orders, products, prices, totals, stock, statuses, customers) must come only from tool results in this reply.',
     'For every question about them, call the matching tool now, even if earlier messages mention the same data. Never reuse, guess or invent them.',
+    'Never add up, count or average amounts yourself: use the count and total fields that list_orders returns.',
     'If a tool fails or returns nothing, say so plainly. Keep each reply short and factual.',
   ].join('\n');
 }
