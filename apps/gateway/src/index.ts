@@ -392,6 +392,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/api/logout' && req.method === 'POST') {
+      // Same CSRF rule as other session writes: a cross-site form cannot log a user out (E2E round 5).
+      if (!isJsonReq(req)) {
+        send(res, 403, { error: 'json content type required' });
+        return;
+      }
       // Bump the version so a copied cookie stops working, not just this browser's copy.
       // Trade-off: ends all of this user's sessions (every device). Bug 6.
       const v = SESSION_SECRET ? verifySession(parseCookies(req.headers.cookie).session ?? '', SESSION_SECRET) : null;
