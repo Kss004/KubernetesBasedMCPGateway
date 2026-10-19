@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, guard } from './api.js';
 
 export default function Audit({ me, setStatus }) {
-  const [rows, setRows] = useState([]);
+  const [rows, setRows] = useState(null); // null = not loaded yet (E2E N7: no empty-state flash)
   const [user, setUser] = useState('');
 
   const load = useCallback(async () => setRows((await api('/api/audit')).audit), []);
@@ -11,8 +11,8 @@ export default function Audit({ me, setStatus }) {
     guard(setStatus, load)();
   }, [load, setStatus]);
 
-  const users = [...new Set(rows.map((r) => r.user_name).filter(Boolean))].sort();
-  const shown = user ? rows.filter((r) => r.user_name === user) : rows;
+  const users = [...new Set((rows ?? []).map((r) => r.user_name).filter(Boolean))].sort();
+  const shown = user ? (rows ?? []).filter((r) => r.user_name === user) : rows ?? [];
 
   return (
     <section>
@@ -60,7 +60,8 @@ export default function Audit({ me, setStatus }) {
           ))}
         </tbody>
       </table>
-      {shown.length === 0 && <p className="muted">No calls yet.</p>}
+      {rows === null && <p className="muted">Loading…</p>}
+      {rows !== null && shown.length === 0 && <p className="muted">No calls yet.</p>}
     </section>
   );
 }
