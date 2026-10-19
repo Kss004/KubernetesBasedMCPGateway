@@ -181,6 +181,8 @@ const server = http.createServer(async (req, res) => {
           auth: req.headers.authorization ?? '',
           body,
         });
+        // RFC 6750: tells MCP clients this endpoint wants a bearer key (E2E L8).
+        if (out.status === 401) res.setHeader('WWW-Authenticate', 'Bearer realm="urumi"');
         send(res, out.status, out.json);
       } catch (e) {
         send(res, errStatus(e), { error: (e as Error).message });
