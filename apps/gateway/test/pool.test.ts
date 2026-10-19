@@ -56,3 +56,20 @@ describe('UpstreamPool.refreshNow', () => {
     assert.equal(pool.getStates()[0].status, 'Connected');
   });
 });
+
+describe('UpstreamPool outage detection (E2E M3)', () => {
+  it('marks Unreachable on the 2nd consecutive failed probe, with no skipped tick', async () => {
+    const row = { id: 's1', slug: 'everything', url: 'http://x/mcp', auth_type: 'none', header_name: null, enabled: true };
+    let up = true;
+    const pg = { query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }) };
+    const pool = new UpstreamPool(pg as never, Buffer.alloc(32));
+    (pool as unknown as { probe: () => Promise<boolean> }).probe = async () => up;
+    await pool.refreshNow();
+    assert.equal(pool.getStates()[0].status, 'Connected');
+    up = false;
+    await pool.refreshNow(); // 1st failure: still Connected, no backoff yet
+    assert.equal(pool.getStates()[0].status, 'Connected');
+    await pool.refreshNow(); // next tick, immediately: 2nd failure is probed, not skipped
+    assert.equal(pool.getStates()[0].status, 'Unreachable');
+  });
+});

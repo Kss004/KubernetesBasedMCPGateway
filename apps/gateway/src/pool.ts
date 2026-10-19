@@ -81,9 +81,13 @@ export class UpstreamPool {
         st.skipUntil = 0;
       } else {
         st.failures += 1;
-        if (st.failures >= 2) st.status = 'Unreachable';
-        // capped backoff while down: 5s, 10s, 20s, 30s max
-        st.skipUntil = now + Math.min(30000, 5000 * 2 ** Math.max(0, st.failures - 1));
+        // Back off only once Unreachable: the 2 failures that confirm an outage run on
+        // consecutive ticks (~10s, D24). Backing off after the 1st skipped ticks (E2E M3).
+        if (st.failures >= 2) {
+          st.status = 'Unreachable';
+          // capped backoff while down: 5s, 10s, 20s, 30s max
+          st.skipUntil = now + Math.min(30000, 5000 * 2 ** (st.failures - 2));
+        }
       }
     }));
     for (const id of [...this.states.keys()]) {
