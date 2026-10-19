@@ -76,15 +76,17 @@ async function sessionUser(req: http.IncomingMessage): Promise<SessionUser | nul
 // Session-authed mutations need a JSON content type (CSRF defence).
 const isJsonReq = (req: http.IncomingMessage): boolean =>
   (req.headers['content-type'] ?? '').includes('application/json');
-async function adminAuth(req: http.IncomingMessage): Promise<SessionUser | 'token' | null> {
-  if (isAdmin(req)) return 'token';
+// 401 = not authenticated; 403 = signed in but not an admin, or a non-JSON write (CSRF guard). E2E L7.
+async function requireAdmin(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
+  if (isAdmin(req)) return true;
   const u = await sessionUser(req);
-  if (u && u.role === 'admin') {
-    if (req.method !== 'GET' && !isJsonReq(req)) return null;
-    return u;
-  }
-  return null;
+  if (!u) send(res, 401, { error: 'unauthorized' });
+  else if (u.role !== 'admin') send(res, 403, { error: 'admin only' });
+  else if (req.method !== 'GET' && !isJsonReq(req)) send(res, 403, { error: 'json content type required' });
+  else return true;
+  return false;
 }
+
 const readJson = (req: http.IncomingMessage, limit = 64 << 10): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -186,10 +188,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/servers')) {
-      if (!(await adminAuth(req))) {
-        send(res, 401, { error: 'unauthorized' });
-        return;
-      }
+      if (!(await requireAdmin(req, res))) return;
       try {
         const m = /^\/api\/servers(?:\/([0-9a-f-]{36}))?$/.exec(req.url ?? '');
         if (!m) {
@@ -232,19 +231,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/api/upstreams' && req.method === 'GET') {
-      if (!(await adminAuth(req))) {
-        send(res, 401, { error: 'unauthorized' });
-        return;
-      }
+      if (!(await requireAdmin(req, res))) return;
       send(res, 200, { upstreams: upstreams.getStates() });
       return;
     }
     if ((req.url ?? '').split('?')[0] === '/api/tools' && req.method === 'GET') {
       // Dashboard servers page: cached tool names + description-change flags.
-      if (!(await adminAuth(req))) {
-        send(res, 401, { error: 'unauthorized' });
-        return;
-      }
+      if (!(await requireAdmin(req, res))) return;
       send(res, 200, { tools: aggregator.listAllTools() });
       return;
     }
@@ -275,10 +268,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if ((req.url ?? '').startsWith('/api/users')) {
-      if (!(await adminAuth(req))) {
-        send(res, 401, { error: 'unauthorized' });
-        return;
-      }
+      if (!(await requireAdmin(req, res))) return;
       try {
         if (req.method === 'GET' && req.url === '/api/users') {
           send(res, 200, { users: await listUsers(pool) });
@@ -316,10 +306,7 @@ const server = http.createServer(async (req, res) => {
     }
     if ((req.url ?? '').startsWith('/api/keys')) {
       // Member self-service lives under /api/me/keys; this stays admin-only.
-      if (!(await adminAuth(req))) {
-        send(res, 401, { error: 'unauthorized' });
-        return;
-      }
+      if (!(await requireAdmin(req, res))) return;
       try {
         if (req.method === 'GET' && req.url === '/api/keys') {
           send(res, 200, { keys: await listKeys(pool) });
