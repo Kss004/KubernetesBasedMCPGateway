@@ -382,3 +382,17 @@ describe('exact today range in the prompt (E2E N8)', () => {
     assert.ok(p.includes('after="2026-10-20T00:00:00" and before="2026-10-20T23:59:59"'));
   });
 });
+
+describe('no leaked reasoning (E2E round 6)', () => {
+  it('strips <think> blocks, including an unclosed one, from model content', async () => {
+    const { stripThinking } = await import('../src/chat.ts');
+    assert.equal(stripThinking('<think>I should call a tool</think>\nNo tool can convert currency.'), 'No tool can convert currency.');
+    assert.equal(stripThinking('Answer.<think>trailing, never closed'), 'Answer.');
+    assert.equal(stripThinking('plain answer'), 'plain answer');
+  });
+  it('the prompt allows answering without a tool when none fits', () => {
+    const p = buildSystemPrompt();
+    assert.match(p, /If no available tool can do what is asked, say so in one sentence and do not call a tool/);
+    assert.match(p, /never describe your reasoning/);
+  });
+});
