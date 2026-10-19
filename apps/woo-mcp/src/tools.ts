@@ -36,6 +36,35 @@ const slimOrder = (o: WOrder) => ({
   payment: o.payment_method_title,
 });
 
+// get_order: an allowlist, not the raw order. The raw one carries order_key (opens the
+// order-received page), customer IP, user agent, email, phone and meta_data (E2E L12).
+type WAddr = { first_name?: string; last_name?: string; address_1?: string; city?: string; state?: string; postcode?: string; country?: string };
+const addr = (a?: WAddr) =>
+  a && {
+    name: `${a.first_name ?? ''} ${a.last_name ?? ''}`.trim(),
+    address_1: a.address_1,
+    city: a.city,
+    state: a.state,
+    postcode: a.postcode,
+    country: a.country,
+  };
+export const orderDetail = (o: WOrder & {
+  currency?: string;
+  shipping_total?: string;
+  total_tax?: string;
+  line_items?: Array<{ name?: string; quantity?: number; total?: string }>;
+  billing?: WAddr;
+  shipping?: WAddr;
+}) => ({
+  ...slimOrder(o),
+  currency: o.currency,
+  shipping_total: o.shipping_total,
+  total_tax: o.total_tax,
+  items: (o.line_items ?? []).map((i) => ({ name: i.name, quantity: i.quantity, total: i.total })),
+  billing: addr(o.billing),
+  shipping: addr(o.shipping),
+});
+
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
 
 export function registerTools(server: McpServer, cfg: WooConfig): void {
@@ -116,7 +145,7 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
       description: 'Fetch one order with totals, items and addresses.',
       inputSchema: { id: z.number().int().min(1) },
     },
-    async (args) => text(await wooRequest(cfg, 'GET', `/wp-json/wc/v3/orders/${args.id}`)),
+    async (args) => text(orderDetail(await wooRequest(cfg, 'GET', `/wp-json/wc/v3/orders/${args.id}`))),
   );
 
   server.registerTool(

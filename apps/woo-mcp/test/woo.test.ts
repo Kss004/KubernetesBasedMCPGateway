@@ -27,3 +27,23 @@ describe('signRequest', () => {
     assert.equal(q.get('after'), '2026-10-17T00:00:00'); // query value itself sent once-encoded
   });
 });
+
+describe('orderDetail (E2E L12)', () => {
+  it('keeps totals, items and addresses; drops order_key and customer PII', async () => {
+    const { orderDetail } = await import('../src/tools.ts');
+    const raw = {
+      id: 26, status: 'processing', total: '20.00', date_created: '2026-10-19T10:45:00',
+      payment_method_title: 'Cash on delivery', currency: 'USD', shipping_total: '0.00', total_tax: '0.00',
+      order_key: 'wc_order_secret', customer_ip_address: '10.0.0.1', customer_user_agent: 'x', cart_hash: 'h',
+      billing: { first_name: 'A', last_name: 'V', address_1: '1 St', city: 'X', state: 'CA', postcode: '90001', country: 'US', email: 'a@b.c', phone: '555' },
+      line_items: [{ name: 'Test Lamp', quantity: 1, total: '20.00', sku: 'z', meta_data: [] }],
+      meta_data: [{ key: 'k', value: 'v' }],
+    };
+    const out = orderDetail(raw as never);
+    const s = JSON.stringify(out);
+    for (const bad of ['wc_order_secret', '10.0.0.1', 'a@b.c', '555', 'meta_data', 'cart_hash']) assert.ok(!s.includes(bad), bad);
+    assert.deepEqual(out.items, [{ name: 'Test Lamp', quantity: 1, total: '20.00' }]);
+    assert.equal(out.billing?.name, 'A V');
+    assert.equal(out.total, '20.00');
+  });
+});
