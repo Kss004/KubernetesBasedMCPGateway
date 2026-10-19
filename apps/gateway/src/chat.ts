@@ -277,7 +277,7 @@ export async function handleChat(opts: {
     gone = !res.writableEnded;
   });
   const fail = async (name: string, serverSlug: string, errorClass: string, error: string, durationMs = 0, outcome: 'error' | 'denied' = 'error') => {
-    console.error(`chat tool ${outcome}: user=${opts.user.name} tool=${name} class=${errorClass} error=${error}`);
+    console.error(`chat tool ${outcome}: user=${opts.user.name} tool=${name} class=${errorClass} error=${error.slice(0, 200)}`);
     await logCall(opts.pg, {
       userId: opts.user.id,
       keyId: null,
@@ -335,7 +335,8 @@ export async function handleChat(opts: {
     });
   } catch (e) {
     const message = (e as Error).message ?? 'chat failed';
-    if (message !== 'client disconnected') console.error(`chat failed: user=${opts.user.name} error=${message}`);
+    // Capped: an error text must never carry tool arguments into the log in full (D22, E2E N4).
+    if (message !== 'client disconnected') console.error(`chat failed: user=${opts.user.name} error=${message.slice(0, 200)}`);
     emit('error', { message });
   }
   res.end();
