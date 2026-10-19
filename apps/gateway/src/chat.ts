@@ -31,13 +31,27 @@ export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {
 }
 
 // The model does not know what "today" means, so pin date + timezone (T6.2);
-// list_orders answers "today" via after/before off this day.
-export function buildSystemPrompt(now = new Date()): string {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+// list_orders answers "today" via after/before off this day. STORE_TIMEZONE must equal the
+// store's WordPress timezone (both charts' values), since WooCommerce reads after/before in
+// site-local time. Default UTC; an invalid name falls back to UTC.
+export function storeDay(now: Date, tz: string): { tz: string; day: string; local: string } {
+  try {
+    return {
+      tz,
+      day: now.toLocaleDateString('en-CA', { timeZone: tz }), // YYYY-MM-DD
+      local: now.toLocaleString('en-US', { timeZone: tz, hour12: false }),
+    };
+  } catch {
+    return storeDay(now, 'UTC');
+  }
+}
+
+export function buildSystemPrompt(now = new Date(), tzName = process.env.STORE_TIMEZONE || 'UTC'): string {
+  const { tz, day, local } = storeDay(now, tzName);
   return [
     'You are the store assistant.',
     'Format: plain text only. No markdown (no ** or #, no tables), never raw HTML. For lists, one item per line starting with "- ".',
-    `Current date: ${now.toISOString().slice(0, 10)}. Timezone: ${tz}. Local time: ${now.toString()}.`,
+    `Current date: ${day}. Timezone: ${tz}. Local time: ${local}.`,
     'For "today" questions pass after=<day>T00:00:00 and before=<day>T23:59:59 to list_orders.',
     // E2E H1: on follow-up turns the model copied store data from earlier replies (history
     // carries no tool results) instead of calling a tool, and invented orders.

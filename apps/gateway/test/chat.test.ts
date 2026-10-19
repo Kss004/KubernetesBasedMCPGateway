@@ -364,3 +364,14 @@ describe('rate limit shows as plain text (E2E R2)', () => {
     assert.ok(!sse.includes('event: error'));
   });
 });
+
+describe('store timezone for "today" (bug: orders today used UTC)', () => {
+  it('uses the store day, not the UTC day, near midnight', () => {
+    const t = new Date('2026-10-19T20:30:00Z'); // 02:00 on Oct 20 in Kolkata
+    assert.match(buildSystemPrompt(t, 'Asia/Kolkata'), /Current date: 2026-10-20\. Timezone: Asia\/Kolkata/);
+    assert.match(buildSystemPrompt(t, 'UTC'), /Current date: 2026-10-19\. Timezone: UTC/);
+  });
+  it('falls back to UTC for an invalid timezone name', () => {
+    assert.match(buildSystemPrompt(new Date('2026-10-19T20:30:00Z'), 'Not/AZone'), /Timezone: UTC/);
+  });
+});

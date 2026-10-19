@@ -54,6 +54,8 @@ spec:
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-session, key: secret }
+            - name: STORE_TIMEZONE
+              value: {{ .Values.storeTimezone | quote }}
             - name: COOKIE_SECURE
               value: {{ .Values.session.cookieSecure | quote }}
             # P6 chat LLM (D10): base URL + pinned model are values (not secrets);

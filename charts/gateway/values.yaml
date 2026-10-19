@@ -25,6 +25,10 @@ storage:
   postgres: 5Gi
   className: "" # empty = cluster default StorageClass
 
+# Timezone for chat's "today" (prompt date and list_orders after/before). Must equal the
+# store chart's `timezone`, since WooCommerce reads after/before in site-local time.
+storeTimezone: "UTC"
+
 session:
   # Bug 6: adds Secure to the session cookie. Keep false over plain http (kind, k3d):
   # browsers drop Secure cookies on http and login would silently fail.

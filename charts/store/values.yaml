@@ -3,6 +3,9 @@ storeHost: shop.localhost
 # Full public URL (WP_HOME/WP_SITEURL, D21). Empty = http://<storeHost>.
 # Set it for https or a non-80 port; the Ingress host stays storeHost.
 storeUrl: ""
+# WordPress timezone (IANA name), set by the bootstrap. Must equal the gateway chart's
+# storeTimezone so chat's "orders today" uses the same day as WooCommerce.
+timezone: "UTC"
 
 ingress:
   className: nginx

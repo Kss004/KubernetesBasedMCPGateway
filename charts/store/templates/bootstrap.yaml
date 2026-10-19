@@ -52,6 +52,8 @@ data:
     update_option('woocommerce_currency', 'USD');
     // WooCommerce 11 starts new stores in "Coming soon" mode, hiding the shop from shoppers.
     update_option('woocommerce_coming_soon', 'no');
+    // Store timezone (values: timezone); the gateway's storeTimezone must match it.
+    update_option('timezone_string', {{ .Values.timezone | quote }});
     $cod = get_option('woocommerce_cod_settings', array());
     $cod['enabled'] = 'yes';
     $cod['title'] = 'Cash on delivery';
