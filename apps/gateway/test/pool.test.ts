@@ -98,3 +98,24 @@ describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
     }
   });
 });
+
+describe('Aggregator tool refresh timeout (E2E M3)', () => {
+  it('a refresh against an upstream that never answers ends at the tool timeout', async () => {
+    const { Aggregator } = await import('../src/aggregator.ts');
+    const http = await import('node:http');
+    const hang = http.createServer(() => {});
+    await new Promise<void>((r) => hang.listen(0, '127.0.0.1', () => r()));
+    const port = (hang.address() as { port: number }).port;
+    const row = { id: 's1', slug: 'hang', url: `http://127.0.0.1:${port}/mcp`, auth_type: 'none', header_name: null, enabled: true };
+    const pg = { query: async (sql: string) => ({ rows: sql.includes('FROM servers') ? [row] : [] }) };
+    const agg = new Aggregator(pg as never, Buffer.alloc(32), 15000, 300);
+    try {
+      const t0 = Date.now();
+      await agg.refresh();
+      assert.ok(Date.now() - t0 < 1500, `refresh took ${Date.now() - t0}ms`);
+    } finally {
+      hang.closeAllConnections();
+      hang.close();
+    }
+  });
+});

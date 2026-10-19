@@ -127,11 +127,12 @@ export class Aggregator {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), this.toolTimeoutMs);
     try {
+      // Per-request signal: the SDK transport ignores requestInit.signal (E2E M3, see pool.probe).
       const transport = new StreamableHTTPClientTransport(new URL(url), {
-        requestInit: { headers: await this.headersFor(serverId, s.auth_type, s.header_name), signal: ctl.signal },
+        requestInit: { headers: await this.headersFor(serverId, s.auth_type, s.header_name) },
       });
-      await client.connect(transport);
-      const { tools } = await client.listTools();
+      await client.connect(transport, { signal: ctl.signal });
+      const { tools } = await client.listTools(undefined, { signal: ctl.signal });
       const out: PrefixedTool[] = [];
       for (const tool of tools.slice(0, MAX_TOOLS_PER_SERVER)) {
         const name = prefixName(slug, tool.name);
@@ -139,10 +140,10 @@ export class Aggregator {
         const description = capDescription(typeof tool.description === 'string' ? tool.description : '');
         out.push({ name, description, inputSchema: tool.inputSchema ?? {}, serverId, serverSlug: slug, changed: false });
       }
-      await client.close().catch(() => {});
       return out;
     } finally {
       clearTimeout(t);
+      await client.close().catch(() => {}); // aborts the transport's own in-flight fetch
     }
   }
 }
