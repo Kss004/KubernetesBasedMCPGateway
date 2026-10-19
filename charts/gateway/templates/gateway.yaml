@@ -54,6 +54,8 @@ spec:
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-session, key: secret }
+            - name: COOKIE_SECURE
+              value: {{ .Values.session.cookieSecure | quote }}
             # P6 chat LLM (D10): base URL + pinned model are values (not secrets);
             # the key arrives out-of-band via `make secrets` (optional so the
             # gateway still boots without it; /api/chat then answers 503).

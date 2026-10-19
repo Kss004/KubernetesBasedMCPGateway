@@ -33,3 +33,6 @@ storage:
 imagePullSecrets: []
 
 # Secrets stay generated in-chart (D11). LLM key out-of-band: make secrets.
+
+session:
+  cookieSecure: true # prod is served over https; set false only for an http-only rehearsal

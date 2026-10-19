@@ -28,6 +28,8 @@ import {
 
 const cfg = loadConfig();
 const loginLimiter = new LoginLimiter();
+// Bug 6: Secure only when served over https (values-prod), or http login would break.
+const COOKIE_FLAGS = `HttpOnly; Path=/; SameSite=Lax${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 const pool = createPool(cfg.pg);
 // Postgres may still be booting after a node restart; retry instead of
 // crashlooping (readiness already keeps us out of endpoints meanwhile).
@@ -376,7 +378,7 @@ const server = http.createServer(async (req, res) => {
         const token = mintSession(u.id, SESSION_SECRET);
         res.writeHead(200, {
           'Content-Type': 'application/json',
-          'Set-Cookie': `session=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`,
+          'Set-Cookie': `session=${encodeURIComponent(token)}; ${COOKIE_FLAGS}; Max-Age=604800`,
         });
         res.end(JSON.stringify({ id: u.id, name: u.name, role: u.role }));
       } catch (e) {
@@ -387,7 +389,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/logout' && req.method === 'POST') {
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        'Set-Cookie': 'session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0',
+        'Set-Cookie': `session=; ${COOKIE_FLAGS}; Max-Age=0`,
       });
       res.end('{}');
       return;

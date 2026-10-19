@@ -25,6 +25,11 @@ storage:
   postgres: 5Gi
   className: "" # empty = cluster default StorageClass
 
+session:
+  # Bug 6: adds Secure to the session cookie. Keep false over plain http (kind, k3d):
+  # browsers drop Secure cookies on http and login would silently fail.
+  cookieSecure: false
+
 llm:
   # D10 (revised 2026-10-19): Groq primary, since Gemini chat completions hung (60s+
   # timeouts) while Groq answered in 0.2s. Any OpenAI-compatible endpoint works;

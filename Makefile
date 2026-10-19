@@ -95,7 +95,8 @@ prod-up: ## k3d cluster with values-prod.yaml; images retagged locally to GHCR n
 	# No --wait on the store: its post-install bootstrap creates the Secret woo-mcp needs.
 	helm upgrade --install $(STORE_RELEASE) ./charts/store -n $(STORE_NS) -f charts/store/values-prod.yaml --set storeHost=$(PROD_SHOP) --set storeUrl=http://$(PROD_SHOP):$(PROD_PORT) --timeout 10m
 	helm upgrade --install $(UP_RELEASE) ./charts/upstreams -n $(UP_NS) -f charts/upstreams/values-prod.yaml
-	helm upgrade --install $(GW_RELEASE) ./charts/gateway -n $(GW_NS) -f charts/gateway/values-prod.yaml --set appHost=$(PROD_APP) --wait --timeout 5m
+	# The rehearsal is plain http, so the prod Secure cookie is turned off here (browsers drop it on http).
+	helm upgrade --install $(GW_RELEASE) ./charts/gateway -n $(GW_NS) -f charts/gateway/values-prod.yaml --set appHost=$(PROD_APP) --set session.cookieSecure=false --wait --timeout 5m
 	GW_NS="$(GW_NS)" STORE_NS="$(STORE_NS)" STORE_RELEASE="$(STORE_RELEASE)" GW_RELEASE="$(GW_RELEASE)" bash scripts/seed.sh
 
 prod-check: export KUBECONFIG = $(PROD_KUBECONFIG)
