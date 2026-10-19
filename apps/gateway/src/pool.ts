@@ -103,17 +103,19 @@ export class UpstreamPool {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), this.healthTimeoutMs);
     try {
+      // The SDK transport fetches with its own AbortController and ignores requestInit.signal;
+      // only the per-request signal is honored (E2E M3: probes ran ~13s, not 2s).
       const transport = new StreamableHTTPClientTransport(new URL(st.url), {
-        requestInit: { headers: this.authHeaders(st), signal: ctl.signal },
+        requestInit: { headers: this.authHeaders(st) },
       });
-      await client.connect(transport);
-      await client.listTools();
-      await client.close().catch(() => {});
+      await client.connect(transport, { signal: ctl.signal });
+      await client.listTools(undefined, { signal: ctl.signal });
       return true;
     } catch {
       return false;
     } finally {
       clearTimeout(t);
+      await client.close().catch(() => {}); // aborts the transport's own in-flight fetch
     }
   }
 
@@ -154,20 +156,18 @@ export class UpstreamPool {
         ctl.abort();
       }, timeoutMs);
       try {
+        // Per-request signal: the transport ignores requestInit.signal (see probe).
         const transport = new StreamableHTTPClientTransport(new URL(st.url), {
-          requestInit: { headers: this.authHeaders(st), signal: ctl.signal },
+          requestInit: { headers: this.authHeaders(st) },
         });
-        await client.connect(transport);
-        try {
-          return await client.callTool({ name: toolName, arguments: args });
-        } finally {
-          await client.close().catch(() => {});
-        }
+        await client.connect(transport, { signal: ctl.signal });
+        return await client.callTool({ name: toolName, arguments: args }, undefined, { signal: ctl.signal });
       } catch (e) {
         if (timedOut) throw Object.assign(new Error(`upstream timeout after ${timeoutMs}ms`), { status: 504 });
         throw e;
       } finally {
         clearTimeout(t);
+        await client.close().catch(() => {});
       }
     };
     try {

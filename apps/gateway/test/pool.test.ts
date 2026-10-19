@@ -73,3 +73,28 @@ describe('UpstreamPool outage detection (E2E M3)', () => {
     assert.equal(pool.getStates()[0].status, 'Unreachable');
   });
 });
+
+describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
+  it('a probe and a tool call to an upstream that never answers fail at our timeout', async () => {
+    const http = await import('node:http');
+    const hang = http.createServer(() => {}); // accepts, never responds
+    await new Promise<void>((r) => hang.listen(0, '127.0.0.1', () => r()));
+    const port = (hang.address() as { port: number }).port;
+    const row = { id: 's1', slug: 'hang', url: `http://127.0.0.1:${port}/mcp`, auth_type: 'none', header_name: null, enabled: true };
+    const pg = { query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }) };
+    const pool = new UpstreamPool(pg as never, Buffer.alloc(32), 5000, 300);
+    try {
+      let t0 = Date.now();
+      await pool.refreshNow();
+      assert.ok(Date.now() - t0 < 1500, `probe took ${Date.now() - t0}ms`);
+      // Force Connected so callTool reaches the upstream, then expect our 400ms timeout.
+      (pool as unknown as { states: Map<string, { status: string }> }).states.get('s1')!.status = 'Connected';
+      t0 = Date.now();
+      await assert.rejects(pool.callTool('s1', 'x', {}, 400), /upstream timeout after 400ms/);
+      assert.ok(Date.now() - t0 < 1500, `call took ${Date.now() - t0}ms`);
+    } finally {
+      hang.closeAllConnections();
+      hang.close();
+    }
+  });
+});
