@@ -15,6 +15,7 @@ import { handleChat } from './chat.js';
 import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 import { listAudit } from './audit.js';
+import { errStatus, errMessage } from './errors.js';
 import {
   hashPassword,
   checkPassword,
@@ -122,7 +123,6 @@ const send = (res: http.ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
 };
-const errStatus = (e: unknown): number => (e as { status?: number }).status ?? 500;
 
 // P5 dashboard: React build output (apps/dashboard/dist, fixed file names).
 // Preloaded once; exact paths only (no join from the URL, no traversal).
@@ -205,7 +205,7 @@ const server = http.createServer(async (req, res) => {
         if (out.status === 401) res.setHeader('WWW-Authenticate', 'Bearer realm="urumi"');
         send(res, out.status, out.json);
       } catch (e) {
-        send(res, errStatus(e), { error: (e as Error).message });
+        send(res, errStatus(e), { error: errMessage(e) });
       }
       return;
     }
@@ -248,7 +248,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         const status = errStatus(e);
         if (status === 500) console.error('admin api', (e as Error).message);
-        send(res, status, { error: (e as Error).message });
+        send(res, status, { error: errMessage(e) });
       }
       return;
     }
@@ -278,7 +278,7 @@ const server = http.createServer(async (req, res) => {
       try {
         await handleChat({ pg: pool, aggregator, upstreams, user: u, body: await readJson(req, 256 << 10), res });
       } catch (e) {
-        if (!res.headersSent) send(res, errStatus(e), { error: (e as Error).message });
+        if (!res.headersSent) send(res, errStatus(e), { error: errMessage(e) });
         else {
           try {
             res.end();
@@ -322,7 +322,7 @@ const server = http.createServer(async (req, res) => {
         if ((e as { code?: string }).code === '23505') send(res, 409, { error: 'name taken' });
         else {
           if (status === 500) console.error('users api', (e as Error).message);
-          send(res, status, { error: (e as Error).message });
+          send(res, status, { error: errMessage(e) });
         }
       }
       return;
@@ -351,7 +351,7 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         const status = errStatus(e);
         if (status === 500) console.error('keys api', (e as Error).message);
-        send(res, status, { error: (e as Error).message });
+        send(res, status, { error: errMessage(e) });
       }
       return;
     }
@@ -387,7 +387,7 @@ const server = http.createServer(async (req, res) => {
         });
         res.end(JSON.stringify({ id: u.id, name: u.name, role: u.role }));
       } catch (e) {
-        send(res, errStatus(e), { error: (e as Error).message });
+        send(res, errStatus(e), { error: errMessage(e) });
       }
       return;
     }
@@ -449,7 +449,7 @@ const server = http.createServer(async (req, res) => {
         }
         send(res, 405, { error: 'method not allowed' });
       } catch (e) {
-        send(res, errStatus(e), { error: (e as Error).message });
+        send(res, errStatus(e), { error: errMessage(e) });
       }
       return;
     }
