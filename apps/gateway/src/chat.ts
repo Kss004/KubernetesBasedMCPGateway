@@ -147,8 +147,7 @@ export async function chatCompletions(
     const s = Number(resp.headers.get('retry-after'));
     await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 1000, 10000)));
   }
-  if (resp.status === 429)
-    throw Object.assign(new Error('the model is rate-limited, try again in a few seconds'), { status: 429 });
+  if (resp.status === 429) throw Object.assign(new Error(RATE_LIMITED), { status: 429 });
   if (!resp.ok) throw Object.assign(new Error(`llm ${resp.status}`), { status: 502 });
   const json = (await resp.json()) as {
     choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
@@ -180,6 +179,7 @@ export const looksLikeStoreData = (text: string, userText = ''): boolean =>
   (text.match(STORE_DATA) ?? []).some((tok) => !userText.includes(tok));
 export const NUDGE =
   'Your last answer stated store data without calling a tool in this reply. Call the matching tool now and answer only from its result.';
+export const RATE_LIMITED = 'The model is busy right now (rate-limited). Please try again in a few seconds.';
 export const FALLBACK = "I couldn't look that up with the store tools. Please ask again.";
 
 export async function driveLoop(deps: {
@@ -337,7 +337,9 @@ export async function handleChat(opts: {
     const message = (e as Error).message ?? 'chat failed';
     // Capped: an error text must never carry tool arguments into the log in full (D22, E2E N4).
     if (message !== 'client disconnected') console.error(`chat failed: user=${opts.user.name} error=${message.slice(0, 200)}`);
-    emit('error', { message });
+    // A rate limit is expected on free tiers: plain text, not an [error: ...] line (E2E R2).
+    if ((e as { status?: number }).status === 429) emit('text', { content: RATE_LIMITED });
+    else emit('error', { message });
   }
   res.end();
 }

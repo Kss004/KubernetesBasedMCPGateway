@@ -12,6 +12,7 @@ import {
   MAX_TURNS,
   NUDGE,
   FALLBACK,
+  RATE_LIMITED,
   looksLikeStoreData,
   type LlmMessage,
   type LlmTurn,
@@ -289,7 +290,7 @@ describe('E2E round 1 fixes', () => {
     let calls = 0;
     await assert.rejects(
       chatCompletions([], [], cfg, (async () => (calls++, limited())) as typeof fetch),
-      /rate-limited, try again in a few seconds/,
+      (e: Error) => e.message === RATE_LIMITED,
     );
     assert.equal(calls, 2);
   });
@@ -342,5 +343,24 @@ describe('H1 guard: no store data without a tool in this request (E2E round 2)',
   it('after a tool ran in this request, data in the answer is allowed', async () => {
     const r = await run([call('woo__list_orders'), say('#26 $20.00 Test Lamp')]);
     assert.deepEqual(r.text, ['#26 $20.00 Test Lamp']);
+  });
+});
+
+describe('rate limit shows as plain text (E2E R2)', () => {
+  it('a 429 that survives the retry is sent as a text event, not an error event', async () => {
+    const chunks: string[] = [];
+    const res = { writableEnded: false, writeHead: () => {}, write: (c: string) => (chunks.push(String(c)), true), end: () => {}, on: () => {} };
+    await handleChat({
+      pg: { query: async () => ({ rows: [] }) } as never,
+      aggregator: { listAllTools: () => [], resolve: () => null } as never,
+      upstreams: {} as never,
+      user: { id: 'u1', name: 'A', role: 'admin' },
+      body: { messages: [{ role: 'user', content: 'hi' }] },
+      res: res as never,
+      fetchImpl: (async () => new Response('{}', { status: 429, headers: { 'retry-after': '0' } })) as typeof fetch,
+    });
+    const sse = chunks.join('');
+    assert.ok(sse.includes('event: text') && sse.includes(RATE_LIMITED));
+    assert.ok(!sse.includes('event: error'));
   });
 });
