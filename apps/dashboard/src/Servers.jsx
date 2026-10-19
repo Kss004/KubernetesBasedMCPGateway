@@ -6,7 +6,7 @@ import { api, guard } from './api.js';
 const EMPTY = { slug: '', url: '', auth_type: 'none', header_name: '', secret: '' };
 
 export default function Servers({ setStatus }) {
-  const [servers, setServers] = useState([]);
+  const [servers, setServers] = useState(null); // null = not loaded yet (E2E N5: no empty-state flash)
   const [health, setHealth] = useState({});
   const [tools, setTools] = useState({});
   const [editing, setEditing] = useState(null); // server id
@@ -66,7 +66,7 @@ export default function Servers({ setStatus }) {
           </tr>
         </thead>
         <tbody>
-          {servers.map((s) => {
+          {(servers ?? []).map((s) => {
             const st = s.enabled ? health[s.id] ?? 'Unreachable' : 'Disabled';
             return (
               <tr key={s.id}>
@@ -103,7 +103,8 @@ export default function Servers({ setStatus }) {
           })}
         </tbody>
       </table>
-      {servers.length === 0 && <p className="muted">No servers registered.</p>}
+      {servers === null && <p className="muted">Loading…</p>}
+      {servers?.length === 0 && <p className="muted">No servers registered.</p>}
 
       <h3>Add server</h3>
       <form className="row" onSubmit={add}>
