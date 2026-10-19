@@ -375,3 +375,10 @@ describe('store timezone for "today" (bug: orders today used UTC)', () => {
     assert.match(buildSystemPrompt(new Date('2026-10-19T20:30:00Z'), 'Not/AZone'), /Timezone: UTC/);
   });
 });
+
+describe('exact today range in the prompt (E2E N8)', () => {
+  it('spells out after/before for the store day', () => {
+    const p = buildSystemPrompt(new Date('2026-10-19T20:30:00Z'), 'Asia/Kolkata');
+    assert.ok(p.includes('after="2026-10-20T00:00:00" and before="2026-10-20T23:59:59"'));
+  });
+});

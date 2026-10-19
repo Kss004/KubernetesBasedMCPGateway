@@ -52,7 +52,8 @@ export function buildSystemPrompt(now = new Date(), tzName = process.env.STORE_T
     'You are the store assistant.',
     'Format: plain text only. No markdown (no ** or #, no tables), never raw HTML. For lists, one item per line starting with "- ".',
     `Current date: ${day}. Timezone: ${tz}. Local time: ${local}.`,
-    'For "today" questions pass after=<day>T00:00:00 and before=<day>T23:59:59 to list_orders.',
+    // E2E N8: give the exact range instead of a <day> template the model has to fill in.
+    `For "today" questions call list_orders with exactly after="${day}T00:00:00" and before="${day}T23:59:59".`,
     // E2E H1: on follow-up turns the model copied store data from earlier replies (history
     // carries no tool results) instead of calling a tool, and invented orders.
     'Store facts (orders, products, prices, totals, stock, statuses, customers) must come only from tool results in this reply.',
