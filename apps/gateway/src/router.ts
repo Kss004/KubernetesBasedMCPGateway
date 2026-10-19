@@ -21,7 +21,7 @@ export function capResult(payload: unknown): unknown {
 }
 
 // T11.1 (D23): members default-allow every tool except writes.
-// shortcut: fixed in-code deny list; if per-user/per-server grants are needed, move to a DB table + admin API.
+// ponytail: fixed in-code deny list; if per-user/per-server grants are needed, move to a DB table + admin API.
 const MEMBER_DENIED_SUFFIXES = new Set(['create_product', 'update_order_status']);
 
 /** MCP tool results report failure in-band (isError), not as a thrown error. */

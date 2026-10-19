@@ -1,7 +1,7 @@
 // everything-mcp: third upstream (T7.1), deterministic and offline (D8).
 // Reuses mcp-mini stateless shell like mock-mcp. No auth, no network.
 // Tools: echo (round-trip), add (tiny deterministic op).
-// shortcut: stateless here, real SDK everything is stateful; pool 404-retry covers both.
+// ponytail: stateless here, real SDK everything is stateful; pool 404-retry covers both.
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { serve } from 'mcp-mini';

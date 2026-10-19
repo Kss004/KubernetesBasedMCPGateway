@@ -20,7 +20,7 @@ export interface ServerRow {
 // Service DNS in urumi-store / urumi-upstreams is allowed. Any IP literal is
 // denied (covers loopback 127/8, link-local 169.254/16 incl. 169.254.169.254,
 // and private ranges). Plain hostname check only.
-// shortcut: no DNS resolution at admission; a name later resolving to a
+// ponytail: no DNS resolution at admission; a name later resolving to a
 // forbidden IP is not caught — resolve-and-recheck before dialing if that matters.
 export function validUrl(raw: string): boolean {
   let u: URL;

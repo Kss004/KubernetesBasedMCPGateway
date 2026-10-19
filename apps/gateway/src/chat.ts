@@ -126,7 +126,7 @@ export async function chatCompletions(
 ): Promise<LlmTurn> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   let resp: Response;
-  // shortcut: one retry on 429, waiting retry-after (seconds, capped at 10s; 1s if absent
+  // ponytail: one retry on 429, waiting retry-after (seconds, capped at 10s; 1s if absent
   // or a date). No retry library by rule; add backoff with jitter if limits bite in prod.
   for (let attempt = 0; ; attempt++) {
     try {
@@ -246,7 +246,7 @@ const errorClassFor = (e: unknown): string => {
   return 'upstream_error';
 };
 
-// shortcut: non-streaming LLM calls, one text event per turn; switch to
+// ponytail: non-streaming LLM calls, one text event per turn; switch to
 // stream:true when the dashboard needs token streaming.
 export async function handleChat(opts: {
   pg: PgPool;
