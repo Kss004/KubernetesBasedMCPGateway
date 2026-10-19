@@ -169,7 +169,14 @@ export async function chatCompletions(
     const s = Number(resp.headers.get('retry-after'));
     await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 1000, 10000)));
   }
-  if (resp.status === 429) throw Object.assign(new Error(RATE_LIMITED), { status: 429 });
+  if (resp.status === 429) {
+    // For the log only (E2E round 7): which limit hit and when it resets, by header prefix.
+    const detail = [...resp.headers]
+      .filter(([k]) => k === 'retry-after' || k.startsWith('x-ratelimit'))
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ');
+    throw Object.assign(new Error(RATE_LIMITED), { status: 429, detail });
+  }
   if (!resp.ok) throw Object.assign(new Error(`llm ${resp.status}`), { status: 502 });
   const json = (await resp.json()) as {
     choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
@@ -361,7 +368,9 @@ export async function handleChat(opts: {
   } catch (e) {
     const message = (e as Error).message ?? 'chat failed';
     // Capped: an error text must never carry tool arguments into the log in full (D22, E2E N4).
-    if (message !== 'client disconnected') console.error(`chat failed: user=${opts.user.name} error=${message.slice(0, 200)}`);
+    const detail = (e as { detail?: string }).detail;
+    if (message !== 'client disconnected')
+      console.error(`chat failed: user=${opts.user.name} error=${message.slice(0, 200)}${detail ? ` ${detail.slice(0, 300)}` : ''}`);
     // A rate limit is expected on free tiers: plain text, not an [error: ...] line (E2E R2).
     if ((e as { status?: number }).status === 429) emit('text', { content: RATE_LIMITED });
     else emit('error', { message });

@@ -396,3 +396,16 @@ describe('no leaked reasoning (E2E round 6)', () => {
     assert.match(p, /never describe your reasoning/);
   });
 });
+
+describe('rate-limit log detail (E2E round 7)', () => {
+  it('a final 429 carries retry-after and x-ratelimit-* headers for the log', async () => {
+    const cfg = { baseUrl: 'https://llm.test/v1', model: 'm', apiKey: 'k' };
+    const r429 = () =>
+      new Response('{}', { status: 429, headers: { 'retry-after': '0', 'x-ratelimit-remaining-tokens': '0', 'x-other': 'no' } });
+    const e = await chatCompletions([], [], cfg, (async () => r429()) as typeof fetch).catch((x) => x);
+    assert.equal(e.message, RATE_LIMITED);
+    assert.match(e.detail, /retry-after=0/);
+    assert.match(e.detail, /x-ratelimit-remaining-tokens=0/);
+    assert.ok(!e.detail.includes('x-other'));
+  });
+});
