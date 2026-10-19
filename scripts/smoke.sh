@@ -23,9 +23,15 @@ check "/api/me without session is 401" test "$(code "http://$APP/api/me")" = 401
 check "/mcp without key is 401" test "$(code -X POST "http://$APP/mcp" -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = 401
 check "/mcp with bad key is 401" test "$(code -X POST "http://$APP/mcp" -H 'Authorization: Bearer nope' -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = 401
 check "admin API rejects missing auth" test "$(code "http://$APP/api/servers")" = 401
-check "every enabled upstream is Connected" bash -c "curl -s http://$APP/api/upstreams -H 'Authorization: Bearer $TOKEN' |
-  node -e 'let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{const u=JSON.parse(s).upstreams;process.exit(u.length>=3&&u.every(x=>!x.enabled||x.status===\"Connected\")?0:1)})'"
-check "upstream credentials never returned" bash -c "! curl -s http://$APP/api/servers -H 'Authorization: Bearer $TOKEN' | grep -qi '\"secret\"\\|enc_secret'"
+# grep, not node: works from a non-interactive shell without nvm on PATH (E2E L9).
+UPS=$(curl -s "http://$APP/api/upstreams" -H "Authorization: Bearer $TOKEN" | grep -o '{[^{}]*}')
+check "every enabled upstream is Connected" bash -c "[ \$(echo '$UPS' | grep -c '\"slug\"') -ge 3 ] && ! echo '$UPS' | grep '\"enabled\":true' | grep -vq '\"status\":\"Connected\"'"
+# Must read a real 200 server list first, or a failed auth would pass this check (E2E L9).
+SRV_CODE=$(curl -s -o /tmp/smoke-servers.$$ -w '%{http_code}' "http://$APP/api/servers" -H "Authorization: Bearer $TOKEN")
+check "upstream credentials never returned" bash -c "[ '$SRV_CODE' = 200 ] && grep -q '\"slug\"' /tmp/smoke-servers.$$ && ! grep -qi '\"secret\"\\|enc_secret' /tmp/smoke-servers.$$"
+rm -f /tmp/smoke-servers.$$
+check "/mcp 401 sends WWW-Authenticate" bash -c "curl -s -o /dev/null -D - -X POST http://$APP/mcp -H 'Content-Type: application/json' -d '{}' | grep -qi '^www-authenticate: bearer'"
+check "dashboard is served no-cache" bash -c "curl -s -o /dev/null -D - http://$APP/ | grep -qi '^cache-control: no-cache'"
 check "storefront responds" test "$(code "http://$SHOP/")" = 200
 unset TOKEN
 
