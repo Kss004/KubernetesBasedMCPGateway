@@ -85,8 +85,8 @@ export class UpstreamPool {
         // consecutive ticks (~10s, D24). Backing off after the 1st skipped ticks (E2E M3).
         if (st.failures >= 2) {
           st.status = 'Unreachable';
-          // capped backoff while down: 5s, 10s, 20s, 30s max
-          st.skipUntil = now + Math.min(30000, 5000 * 2 ** (st.failures - 2));
+          // capped backoff while down: 5s, 10s, 15s max, so recovery shows within ~15-20s (E2E N3)
+          st.skipUntil = now + Math.min(15000, 5000 * 2 ** (st.failures - 2));
         }
       }
     }));
