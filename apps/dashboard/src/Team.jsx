@@ -109,7 +109,10 @@ function KeyTable({ keys, showUser, onRevoke }) {
             <td>{new Date(k.created_at).toLocaleString()}</td>
             <td>
               {!k.revoked && (
-                <button className="danger" onClick={() => onRevoke(k)}>
+                <button
+                  className="danger"
+                  onClick={() => window.confirm(`Revoke key ${k.prefix}…? Any client using it stops working at once.`) && onRevoke(k)}
+                >
                   Revoke
                 </button>
               )}
