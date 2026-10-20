@@ -28,7 +28,7 @@ PROD_TLS_PORT ?= 8444
 PROD_APP ?= app.localhost
 PROD_SHOP ?= shop.localhost
 REGISTRY ?= ghcr.io/kss004/kubernetesbasedmcpgateway
-# Must match llm.secretName in charts/gateway/values.yaml (llm-groq = Groq, llm = Gemini).
+# Must match llm.secretName in charts/gateway/values.yaml (llm-opencode = OpenCode Go; llm-groq = Groq; llm = Gemini).
 LLM_SECRET ?= llm-opencode
 # Must match llm.fallback.secretName (automatic fallback provider).
 LLM_FALLBACK_SECRET ?= llm-groq
