@@ -1,6 +1,6 @@
 # HANDOFF — human-written zones: T3.4 aggregator, T3.5 router (+T4.1 keys, T4.3 login)
 
-Agents must NOT write these files — only discuss/review/explain (Agents.md §3).
+Agents must NOT write these files — only discuss/review/explain (Agents.md section 3).
 The pool (`src/pool.ts`) and registry (`src/servers.ts`) are done and give you:
 
 - `pool.getStates()` → `{id, slug, url, auth_type, header_name, enabled,

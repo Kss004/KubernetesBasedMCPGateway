@@ -159,3 +159,19 @@ kind was upgraded to the same charts and gateway 0.4.2; `make smoke` passes ther
 - TLS: `ingress.tlsSecretName` renders a `tls:` block, but no certificate was issued (no public domain).
 - Traefik streaming of the chat SSE: Traefik does not buffer responses by default; the chat
   stream was not exercised on k3d (placeholder LLM key on the fresh cluster).
+
+## Re-run on the current build (2026-10-20)
+
+`make prod-up PROD_CLUSTER=urumi-prod PROD_PORT=8081` upgraded the existing cluster (not from
+zero) to gateway 0.4.14, woo-mcp 0.1.5 and mock/everything 0.1.1. These include
+`session.cookieSecure` (forced false for this http rehearsal), `storeTimezone`, `llm.fallback`,
+and the round 1-8 fixes. The images are local and retagged to the GHCR names.
+
+```
+$ make prod-check PROD_CLUSTER=urumi-prod PROD_PORT=8081
+smoke: all checks passed        # 13 checks, incl. security headers, WWW-Authenticate, no-cache
+e2e: all checks passed          # product 17, COD order 18, get_order, key revoked -> 401
+images: ghcr.io/kss004/kubernetesbasedmcpgateway/{gateway:0.4.14, woo-mcp:0.1.5, mock-mcp:0.1.1, everything-mcp:0.1.1}
+all urumi pods Running, restarts=0
+```
+Chat was not exercised on k3d: there is no LLM key Secret there.

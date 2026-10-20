@@ -1,122 +1,310 @@
-# KubernetesBasedMCPGateway — Urumi MCP Gateway on Kubernetes
+# KubernetesBasedMCPGateway: WooCommerce hosting with a team MCP gateway on Kubernetes
 
-## 1. What this is
-
-A multi-tenant MCP gateway on Kubernetes: one `POST /mcp` endpoint aggregates
-WooCommerce (`woo-mcp`), a deterministic mock (`mock-mcp`), and the SDK
-`everything` server into prefixed tools (`<slug>__<tool>`). The gateway holds
-all upstream credentials; clients use only the gateway URL + a user API key.
+One WooCommerce store, a WooCommerce MCP server written for it, and a gateway with a React
+dashboard. An admin registers MCP servers once; every team member then uses all of them through
+one MCP endpoint (`/mcp`) and through a chat agent in the dashboard. The upstream credentials
+never leave the gateway. The same three Helm charts run on kind (local) and on k3s (production),
+with values changes only.
 
 ```
-shop.localhost ──► WordPress + WooCommerce (urumi-store)
-app.localhost  ──► gateway /mcp + /api (urumi-gateway)
-MCP clients ──► gateway URL + `Authorization: Bearer <user key>` only
-gateway ──► woo-mcp (urumi-store) + mock/everything (urumi-upstreams), Streamable HTTP
+ browser ──► shop.localhost ──► WordPress + WooCommerce ── MariaDB      (urumi-store)
+ browser ──► app.localhost  ──► gateway: dashboard, /api, /mcp, chat ── Postgres (urumi-gateway)
+ MCP client (Inspector, Claude Code) ──► app.localhost/mcp + "Authorization: Bearer <user key>"
+
+ gateway ──Streamable HTTP, credential attached here only──► woo-mcp        (urumi-store)
+                                                          ├─► mock-mcp       (urumi-upstreams)
+                                                          └─► everything-mcp (urumi-upstreams)
+ woo-mcp ──WooCommerce REST (OAuth 1.0a, Service DNS)──► WordPress
+ gateway chat ──► LLM (DeepSeek v4.1 flash on OpenCode Go, automatic fallback to Groq)
 ```
 
-Details: `progrestillnow.md` §4, `docs/design-tradeoffs.md`, `docs/threat-model.md`.
+The design and the reasons for it are in `docs/design-tradeoffs.md`, the threat model in
+`docs/threat-model.md`, and the evidence for every claim in `docs/notes/`.
 
-## 2. Prerequisites and versions
+## 1. Repo layout
 
-- WSL2 + Ubuntu 24.04, repo on the WSL filesystem (not `/mnt/c`); `.wslconfig`: 20GB RAM, 8 CPUs.
-- Docker Desktop (WSL2 backend), kind, kubectl, helm, node 24, make.
-- `*.localhost` resolves to loopback in browsers; WSL2 CLI tools needed an
-  `/etc/hosts` entry (`127.0.0.1 app.localhost shop.localhost`) — verified 2026-10-14.
-- Pins: `docs/versions.md` (node v24.21.0, SDK 1.32.1 / spec 2025-11-25,
-  kind v0.33.0, helm v4.3.0, ingress-nginx 4.15.1, WP 7.1.3, WC 11.2.1).
+```
+apps/gateway         MCP aggregator and router (/mcp), admin/users/keys/audit API, chat agent, dashboard host
+apps/dashboard       React (Vite) dashboard: Servers, Team & Keys, Audit, Chat
+apps/woo-mcp         the WooCommerce MCP server (5 tools) over the WooCommerce REST API
+apps/mock-mcp        upstream #2: deterministic tools (convert_currency, a colliding list_products, sleep_forever, break_me)
+apps/everything-mcp  upstream #3: echo/add, built into a pinned image
+apps/mcp-mini        shared stateless Streamable HTTP server shell used by the three upstreams
+charts/store         WordPress, MariaDB, woo-mcp, store bootstrap Job, NetworkPolicies
+charts/gateway       gateway Deployment, Postgres, Ingress, generated Secrets, NetworkPolicies
+charts/upstreams     mock-mcp and everything-mcp
+charts/*/values.yaml   local (kind) defaults; values-local.yaml restates them; values-prod.yaml holds every production difference
+scripts/             smoke.sh, e2e.sh, seed.sh + seed.mjs, test-netpol.sh
+docs/                design-tradeoffs.md, threat-model.md, versions.md, woo-store-access.md, notes/
+```
 
-## 3. Local setup — TODO(verify): `make up` is still stubs (Makefile prints TODO)
+## How it works (short)
+
+- **Tool names (the collision scheme).** Every tool is exposed as `<server slug>__<tool>`. The
+  slug is `[a-z0-9-]`, and a tool whose prefixed name would exceed 64 characters is skipped.
+  `mock` deliberately also has `list_products`, so clients see `woo__list_products` and
+  `mock__list_products`. Nothing is aliased (D5, `docs/design-tradeoffs.md`).
+- **How woo-mcp talks to the store.** It uses the WooCommerce REST API (`/wp-json/wc/v3`) over
+  in-cluster Service DNS, signed with OAuth 1.0a: over plain in-cluster HTTP, WooCommerce accepts
+  nothing else. REST is the public contract, keeps WooCommerce's own logic (totals, stock,
+  status changes) and needs no exec into the WordPress pod. Details:
+  `docs/woo-store-access.md`.
+- **Local domains.** `*.localhost` resolves to loopback in browsers with no setup and is the
+  same on every machine (D17). Node tools in WSL need the hosts line in section 2; nip.io or
+  sslip.io is the fallback.
+- **A tool call:** client → gateway (key hash → user → role check) → the right upstream with
+  that server's credential (attached gateway-side) → result back. Every call is written to the
+  audit log. More in `docs/design-tradeoffs.md`.
+
+## 2. Prerequisites
+
+- Windows + WSL2 (Ubuntu 24.04) or Linux. Keep the repo on the Linux filesystem, not `/mnt/c`.
+- Docker (Docker Desktop with the WSL2 backend), kind v0.33.0, kubectl, Helm v4, Node 24, make.
+  The exact versions and how each was checked are in `docs/versions.md`.
+- Local domains are `*.localhost`. Browsers resolve them to loopback with no setup. Node-based
+  tools in WSL (MCP Inspector, Claude Code) need one hosts line:
+  ```bash
+  grep -q 'app.localhost' /etc/hosts || echo '127.0.0.1 app.localhost shop.localhost' | sudo tee -a /etc/hosts
+  ```
+  WSL rewrites `/etc/hosts` at boot. Add `[network]` with `generateHosts = false` to
+  `/etc/wsl.conf` to keep the line.
+
+## 3. Local setup (kind)
 
 ```bash
-make up        # TODO(verify): target = kind create + ingress + build/load + helm install + seed
-make seed      # registers woo-mcp via admin API (reads token with kubectl, gateway never reads other namespaces)
-make reset     # kind delete cluster — wipes everything (asks first in real use)
+make up
 ```
+This one command:
+1. creates the kind cluster;
+2. installs ingress-nginx;
+3. builds the 4 service images and loads them into kind;
+4. creates the namespaces and placeholder LLM Secrets;
+5. installs the 3 charts and registers the 3 upstream servers (`make seed`).
 
-Ingress: `app.localhost` → gateway, `shop.localhost` → WordPress (ingress-nginx,
-`proxy-buffering: off` on `/mcp`, `/api/chat`). Generated secrets (all
-`randAlphaNum` + `lookup`, kept on uninstall): read human-needed ones with, e.g.
-`kubectl -n urumi-gateway get secret <name> -o jsonpath=...` — never commit values.
+All other Secrets are created inside the cluster:
+- The database passwords, credential encryption key, session secret, admin token and the
+  gateway-to-woo-mcp token are generated by the charts and kept across upgrades (`randAlphaNum`
+  + `lookup`, `helm.sh/resource-policy: keep`).
+- The WooCommerce REST key is created once by the store bootstrap Job, with a least-privilege
+  Role, and is not owned by Helm.
 
-Live state 2026-10-16: cluster `urumi` up; `urumi-gateway` / `urumi-store` /
-`urumi-upstreams` all Running; `helm list -A` shows gateway/store/upstreams +
-ingress-nginx deployed; `/healthz` → ok, `/readyz` → ready.
+Then:
+1. **LLM key** (never in values or git). Paste it at the silent prompt:
+   ```bash
+   read -rs K && make secrets LLM_API_KEY="$K"; unset K                         # primary: Secret llm-opencode
+   read -rs K && make secrets LLM_SECRET=llm-groq LLM_API_KEY="$K"; unset K     # automatic fallback: Secret llm-groq
+   kubectl -n urumi-gateway rollout restart deploy/gateway-gateway
+   ```
+2. **Check it:**
+   ```bash
+   make smoke   # 13 live checks: dashboard, 401s, headers, upstreams Connected, no secrets returned, storefront
+   make e2e     # product via /mcp, storefront COD order via the Store API, order read back, key revoked
+   ```
+3. **Create the dashboard users** (an admin A and a member B) with the admin token:
+   ```bash
+   T=$(kubectl -n urumi-gateway get secret gateway-admin -o jsonpath='{.data.token}' | base64 -d)
+   J='Content-Type: application/json'; H="Authorization: Bearer $T"
+   A_ID=$(curl -s -X POST http://app.localhost/api/users -H "$H" -H "$J" -d '{"name":"A","role":"admin"}' | sed 's/.*"id":"\([^"]*\)".*/\1/')
+   B_ID=$(curl -s -X POST http://app.localhost/api/users -H "$H" -H "$J" -d '{"name":"B","role":"member"}' | sed 's/.*"id":"\([^"]*\)".*/\1/')
+   read -rs P && curl -s -X POST http://app.localhost/api/users/$A_ID/password -H "$H" -H "$J" -d "{\"password\":\"$P\"}"; unset P
+   read -rs P && curl -s -X POST http://app.localhost/api/users/$B_ID/password -H "$H" -H "$J" -d "{\"password\":\"$P\"}"; unset P
+   unset T
+   ```
+   Passwords need at least 8 characters. An admin can also set one-time passwords later on the
+   **Team & Keys** tab. There is no email infrastructure, by design.
 
-## 4. Place an order on the storefront — TODO(verify): re-run on clean `make up`
+Other targets:
+- `make down`: uninstalls the charts but keeps the data.
+- `make reset`: deletes the cluster.
+- `make test-netpol`: proves the cluster's CNI enforces NetworkPolicies (a scratch namespace, baseline plus an allowed/denied pair).
+- `make help`: lists them all.
 
-1. Open `http://shop.localhost/`, add a product to cart, checkout (COD; store needs
-   country/currency + a shipping zone with a method or checkout fails).
-2. Confirm the order in wp-admin and via `list_orders` (DoD T8.1/T8.3).
+Exposed URLs (ingress-nginx, `ingressClassName` from values):
 
-## 5. Use the chat agent
+| URL | What |
+|---|---|
+| http://shop.localhost | storefront; `/wp-admin` for WooCommerce admin |
+| http://app.localhost | dashboard; `/api` for the dashboard API, `/mcp` for MCP clients |
 
-`POST /api/chat` (SSE) with the logged-in session; history is client-sent per
-request (never stored server-side). System prompt pins current date/timezone so
-"today" maps to `list_orders(after/before)`. Audit rows attribute the human user.
+The WooCommerce MCP server, the other upstreams and both databases have **no Ingress**. They
+are ClusterIP Services behind default-deny ingress NetworkPolicies. Only the gateway can reach
+the MCP servers, and only WordPress and woo-mcp can reach the store (see `docs/threat-model.md`).
 
-### LLM provider keys
+## 4. Place an order and see it in WooCommerce admin
 
-The key never goes in values or git. Each provider has its own Secret (key
-`api-key`) in `urumi-gateway`. `llm.secretName` picks which one the gateway
-reads. Load a key without echoing it or saving it to shell history:
+1. Open http://shop.localhost/shop, add a product to the cart, and check out with **Cash on
+   delivery** and any US test address. You get "Order received". The bootstrap Job configures
+   the store: country, currency, COD, a flat-rate shipping zone, and "Coming soon" switched off.
+2. WooCommerce admin: http://shop.localhost/wp-admin, user `admin`, password from
+   ```bash
+   kubectl -n urumi-store get secret store-wp-admin -o jsonpath='{.data.password}' | base64 -d; echo
+   ```
+   Go to **WooCommerce → Orders**: the order is there with status Processing.
 
-```bash
-# Gemini (default: llm.secretName=llm)
-read -rs K && kubectl -n urumi-gateway create secret generic llm --from-literal=api-key="$K" --dry-run=client -o yaml | kubectl apply -f - ; unset K
+## 5. Use the dashboard and the chat agent
 
-# Groq (fallback)
-read -rs K && kubectl -n urumi-gateway create secret generic llm-groq --from-literal=api-key="$K" --dry-run=client -o yaml | kubectl apply -f - ; unset K
-```
+Log in at http://app.localhost.
+- **Admins** land on **Servers**: status (Connected / Unreachable / Disabled), tools, and Add,
+  Edit, Disable and Remove. `woo` is registered first by `make seed`.
+- **Members** land on **Chat** and have no Servers tab.
+- **Team & Keys:** users, one-time passwords, "Generate my key", and issuing or revoking keys
+  (admins).
+- **Audit:** every tool call, with who, server, tool, time, duration, outcome and error class.
+  Members see only their own rows.
 
-After `read -rs K`, paste the key at the blank prompt and press Enter.
+**Chat agent** (the Chat tab):
+- It calls the same aggregator as `/mcp`, as the logged-in user. The model only ever sees tools
+  that user may call, and every call is audited under that user.
+- Tool chips show which server and tool each step used.
+- Prompts to try:
+  - `Create a product called Desk Lamp priced 33.25`
+  - `What orders came in today?` (the day comes from the store timezone)
+  - `Get today's order total and convert it from USD to EUR` (two servers)
 
-Switch provider (values only, no code change):
-
-```bash
-# to Groq
-helm upgrade gateway ./charts/gateway -n urumi-gateway --reuse-values \
-  --set llm.secretName=llm-groq \
-  --set llm.baseUrl=https://api.groq.com/openai/v1 \
-  --set llm.model=qwen/qwen3.8-27b
-
-# back to Gemini
-helm upgrade gateway ./charts/gateway -n urumi-gateway --reuse-values \
-  --set llm.secretName=llm \
-  --set llm.baseUrl=https://generativelanguage.googleapis.com/v1beta/openai \
-  --set llm.model=gemini-3.8-flash
-```
-
-Tested 2026-10-17: `gemini-3.8-flash` and Groq `qwen/qwen3.8-27b` both run the tool loop. Groq `openai/gpt-oss-120b` failed (sent `null` for an optional argument), so avoid it.
-
-A key change alone (same Secret) needs `kubectl -n urumi-gateway rollout restart deploy/gateway-gateway`, because env vars are read at pod start.
+**LLM providers.** Any OpenAI-compatible chat endpoint works. Switching the primary is three values:
+- **Primary:** DeepSeek v4.1 flash on OpenCode Go (`llm.baseUrl`, `llm.model`,
+  `llm.secretName: llm-opencode`). The gateway identifies itself with its own `User-Agent` and a
+  per-conversation `x-opencode-session` header, as OpenCode asks clients to. OpenCode Go is aimed
+  at coding agents; see D10.
+- **Automatic fallback:** Groq `qwen/qwen3.8-27b` (`llm.fallback.*`, Secret `llm-groq`).
+  - When the primary fails (unreachable, a 20s timeout, an error, or rate-limited after one
+    retry), the same request is answered by the fallback, and the primary rests for 60s.
+  - Each failover logs one line in `kubectl -n urumi-gateway logs deploy/gateway-gateway`.
+  - Set `llm.fallback.baseUrl=""` to turn it off.
+- **Also tested:** Gemini (`https://generativelanguage.googleapis.com/v1beta/openai`,
+  `gemini-3.8-flash`, Secret `llm`). Ollama works too, with `http://<host>:11434/v1`.
 
 ## 6. Connect an external MCP client
 
-- Gateway URL: `http://app.localhost/mcp` (Streamable HTTP). Key: member or admin
-  user key (`Authorization: Bearer <key>`), created via dashboard/API, shown once.
-- Verified 2026-10-14 (C2): MCP Inspector v2.11.0 over ingress with a member key —
-  `tools/list` 11 tools in ~24ms, `mock__convert_currency` call in ~31ms.
-  No/bad key → clean `{"error":"unauthorized"}` 401 (re-verified 2026-10-16);
-  `/.well-known/*` → JSON 404.
-- Inspector: server URL + `Authorization: Bearer <key>` in the connection headers
-  (its own `MCP_INSPECTOR_API_TOKEN` is unrelated to our key).
-- Claude Code / Cursor: TODO(verify) — configure the gateway URL with a static
-  `Authorization` header; Claude Code 401/`well-known` behaviour not yet proven
-  (Inspector only so far).
+Every client needs only the gateway URL `http://app.localhost/mcp` (Streamable HTTP) and a user's
+API key. Generate a key on **Team & Keys → Generate my key**; it is shown once. A member sees 9
+tools: the write tools `woo__create_product` and `woo__update_order_status` are admin-only, hidden
+from `tools/list` and rejected if called.
 
-## 9. Repo layout
-
+**MCP Inspector 2.11.0** (UI):
+```bash
+MCP_INSPECTOR_SECRET_STORE=memory npx -y @modelcontextprotocol/inspector@2.11.0
 ```
-apps/gateway       /mcp aggregator+router, /api admin/users/audit/chat, postgres
-apps/woo-mcp       5 Woo tools over WC REST (OAuth1a, same-namespace Service DNS)
-apps/mock-mcp      deterministic upstream #2 (incl. colliding name, sleep_forever)
-apps/everything-mcp  SDK everything server, pinned image (upstream #3)
-charts/{gateway,store,upstreams}  Helm charts (+ values-local/prod overrides)
-scripts/seed.sh    registers woo-mcp through the admin API
-docs/              versions.md, woo-store-access.md, design-tradeoffs.md,
-                   threat-model.md, notes/ (per-task evidence)
-progrestillnow.md  source of truth: status, decisions D1–D26, risks R1–R14
+Connect with transport Streamable HTTP, URL `http://app.localhost/mcp`, and header
+`Authorization: Bearer <key>`. `MCP_INSPECTOR_SECRET_STORE=memory` stops Inspector from saving
+the key to a plain file when no OS keychain exists. Headless:
+```bash
+npx -y @modelcontextprotocol/inspector@2.11.0 --cli http://app.localhost/mcp --transport http \
+  --header "Authorization: Bearer <key>" --method tools/list
 ```
 
-§7 production-like (k3s/Mac mini) + §8 upgrade/rollback: TODO(verify) — P9 awaits
-Oct 20 go/no-go; `helm rollback` rehearsal not yet done.
+**Claude Code** (tested with 2.1.304):
+```bash
+claude mcp add --transport http urumi http://app.localhost/mcp --header "Authorization: Bearer <key>"
+claude mcp list        # urumi: http://app.localhost/mcp (HTTP) - Connected
+```
+Then ask, for example, "Using the urumi tools, what orders came in today?".
+
+**Cursor** and other clients: add an HTTP MCP server with the same URL and the same static
+`Authorization` header. Not tested here.
+
+A missing or bad key gets `401` with `WWW-Authenticate: Bearer realm="urumi"`. A revoked key gets
+`401` and an audit row `revoked_key`.
+
+## 7. Production-like deployment (k3s)
+
+The charts are the same; only `values-prod.yaml` and a few `--set` values change.
+
+| Concern | Local (kind) | Production (k3s) |
+|---|---|---|
+| Ingress | ingress-nginx, `ingress.className: nginx`, buffering-off annotations | k3s Traefik: `ingress.className: traefik`, `controllerNamespace: kube-system`, `controllerPodLabels: {app.kubernetes.io/name: traefik}`; nginx annotations nulled |
+| Hosts | `app.localhost`, `shop.localhost` | real names via `--set appHost=... --set storeHost=...` (required) |
+| Store URL | `http://<storeHost>` | `storeUrl: https://shop.<domain>` (WP_HOME / WP_SITEURL, D21) |
+| TLS | none | `ingress.tlsSecretName` (cert-manager or a manual `kubernetes.io/tls` Secret) |
+| Storage | kind `standard` | `storage.className: local-path` (k3s default) |
+| Images | local tags, `kind load` | `ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag>`; `imagePullSecrets: [{name: ghcr-pull}]` if private |
+| Cookie | no `Secure` (http) | `session.cookieSecure: true` (https only) |
+| Secrets | generated in-chart; LLM keys via `make secrets` | the same |
+
+**Rehearsed on k3s (k3d v5.9.0, k3s v1.35.5)**, evidence in `docs/notes/P4-k3d.md`:
+```bash
+make prod-up      # k3d cluster on ports 8081/8444, values-prod.yaml, images retagged to the GHCR names
+make prod-check   # smoke + e2e against http://app.localhost:8081
+```
+- **2026-10-18 (gateway 0.4.2):** after the startupProbe fix, a fresh run from zero passed first
+  time with zero restarts.
+- **2026-10-20 (current build: gateway 0.4.14, woo-mcp 0.1.5):** `make prod-up` upgraded the
+  existing `urumi-prod` cluster, then `make prod-check` passed smoke 13/13 and e2e 5/5, with zero
+  restarts.
+
+The k3s run found and fixed 6 production bugs, 4 of which kind had hidden:
+- NetworkPolicies admitted only ingress-nginx (Traefik is in `kube-system`);
+- the bootstrap Job raced kube-router's NetworkPolicy allow-list;
+- WordPress probes followed canonical and https redirects to a dead port;
+- the gateway was killed by liveness while Postgres was still pulling;
+- `make seed` registered only one server;
+- `helm install --wait` deadlocked the store chart (its bootstrap creates woo-mcp's Secret).
+
+**VPS: not executed yet** (planned once a VPS is available). Steps:
+1. Install k3s. Open ports 80 and 443. Point DNS at the VPS, or use `sslip.io` names.
+2. Push the images:
+   ```bash
+   docker buildx build --platform linux/amd64,linux/arm64 -f apps/<name>/Dockerfile -t ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag> --push .
+   ```
+   Then create a `ghcr-pull` Secret in each namespace if the packages are private.
+3. Optional TLS: install cert-manager with a Let's Encrypt issuer, then set
+   `ingress.tlsSecretName`.
+4. Create the namespaces and LLM Secrets (`make secrets`). Install the store
+   (`-f values-prod.yaml --set storeHost=... --set storeUrl=https://...`, without `--wait`, as
+   `make prod-up` does). Then install the upstreams, then the gateway
+   (`--set appHost=...`), then run `make seed`.
+5. Check with `PROTO=https APP_HOST=app.<domain> SHOP_HOST=shop.<domain> bash scripts/smoke.sh`
+   and the same for `scripts/e2e.sh`, then `make test-netpol`.
+6. Check that the login limiter sees real client IPs behind klipper-lb. Set
+   `externalTrafficPolicy: Local` on Traefik's Service if it doesn't (see the threat model).
+
+## 8. Upgrade and rollback (Helm 4)
+
+Rehearsed on k3d. Commands and output are in `docs/notes/P4-k3d.md`.
+```bash
+# upgrade one component; a failed rollout rolls itself back
+# prod: always pass the same values file and hosts, or the release falls back to chart defaults
+helm upgrade gateway ./charts/gateway -n urumi-gateway -f charts/gateway/values-prod.yaml \
+  --set appHost=<host> --set gatewayTag=<new> --rollback-on-failure --timeout 3m
+# kind: helm upgrade gateway ./charts/gateway -n urumi-gateway --set gatewayTag=<new> --rollback-on-failure --timeout 3m
+helm history gateway -n urumi-gateway
+helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
+```
+- The same applies to the store (`charts/store`: WordPress, WooCommerce version, woo-mcp tag)
+  and the upstreams. Install the store chart without `--wait`, since its post-install bootstrap
+  creates the Secret woo-mcp needs.
+- During the rehearsal, a bad image tag rolled back automatically while the old pod kept
+  serving. Users and servers in Postgres survived every step.
+- Helm 4 flag names: `--rollback-on-failure` (was `--atomic`), `--force-replace` (was `--force`).
+- Helm reuses the last release's values only when an upgrade passes no `--set` or `-f`. Any
+  `--set` or `-f` starts again from the chart defaults. So always pass the same
+  `-f values-prod.yaml` and host values, or use `--reset-then-reuse-values`. Check what a
+  release holds with `helm get values <release>`.
+- PVCs and generated Secrets carry `helm.sh/resource-policy: keep`, so an uninstall and reinstall
+  keeps the data and passwords. Only `make reset` wipes them.
+
+## 9. Tests
+
+- **Unit:** `cd apps/gateway && npm test` (57 tests). `cd apps/woo-mcp && npm test` (3 tests:
+  OAuth signing, order allowlist, order totals).
+- **Live:** `make smoke`, `make e2e`, `make test-netpol`, `make prod-check`.
+- **End-to-end:** 8 rounds by separate tester sessions (browser plus terminal), with every
+  finding fixed and retested. Reports are in `docs/notes/E2E-2026-10-19*.md`, and the recording
+  script in `docs/notes/DEMO-RUNBOOK.md`.
+
+## 10. Stand-out items attempted
+
+| Item | Where |
+|---|---|
+| Production-like deployment (k3s via k3d; VPS pending) | section 7, `docs/notes/P4-k3d.md`, `charts/*/values-prod.yaml` |
+| Tool permissions (members cannot see or call write tools) | `apps/gateway/src/router.ts` (`grantsAllow`), applied in `/mcp` and in chat |
+| Security hardening: SSRF guard on server URLs, credentials encrypted at rest (AES-256-GCM), default-deny ingress NetworkPolicies with an enforcement test, non-root containers where the image allows, no service-account tokens, least-privilege RBAC for the bootstrap Job, CSP and security headers, login rate limit, logout invalidation | `apps/gateway/src/servers.ts` (`validUrl`), `crypto.ts`, `session.ts`, the `NetworkPolicy` objects in `charts/*/templates/`, `charts/store/templates/bootstrap.yaml` (Role), `scripts/test-netpol.sh` |
+| Upgrades and rollback | section 8, `docs/notes/P4-k3d.md` |
+| Observability (partial): clear Unreachable status with fast detection (about 10s), error classes in the audit, failover and failure log lines | `apps/gateway/src/pool.ts`, `audit.ts`, `chat.ts` |
+| Rate limits (partial): login attempts per IP and user name | `apps/gateway/src/session.ts` (`LoginLimiter`) |
+| LLM resilience: automatic provider fallback | `apps/gateway/src/chat.ts` (`makeLlmCaller`) |
+| Chat correctness guard: no store data shown without a tool call in that request | `apps/gateway/src/chat.ts` (`driveLoop`), D28 |
+
+Not attempted: multi-store provisioning, OAuth on the gateway, many-tools search, hosted MCP
+servers, and multi-replica scaling. The gateway is stateless per request (D6); the limiter and
+fallback cool-down are per pod.

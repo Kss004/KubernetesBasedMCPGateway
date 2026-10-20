@@ -14,7 +14,7 @@ Items marked **REVISED** changed after the first draft. Items marked **NEW** wer
 |---|---|
 | Services stack | TypeScript, Node 24, everywhere |
 | Local cluster | kind on the PC under WSL2, Docker Desktop (WSL2 backend) |
-| Chat agent LLM | OpenAI-compatible chat endpoint, Gemini free tier primary, Ollama fallback, pinned model, key in a Secret created out-of-band (D10) |
+| Chat agent LLM | OpenAI-compatible chat endpoint, pinned model, key in a Secret created out-of-band (D10). Originally Gemini free tier primary; since 2026-10-20 DeepSeek v4.1 flash (OpenCode Go) primary with automatic Groq fallback |
 | Stretch scope | Tool permissions (T11.1) then security hardening (T11.2). Multi-store only if C3 is reached by end of Oct 16 (a day early) |
 | Deadline | Target submit 2026-10-22 night, hard deadline 2026-10-23 |
 | Production target | Mac mini + k3s in a Linux VM, go/no-go on Oct 20. Cloud VPS documented only unless rented (Q11) |
@@ -30,9 +30,16 @@ Items marked **REVISED** changed after the first draft. Items marked **NEW** wer
 
 ## 1. Current state
 
-Repo contains the assignment `.docx` (untracked, see `docs/` after T0.1), `Agents.md`, `README.md` and this file. Git repo + remote exist. No cluster, no source code. Nothing is built. `windows-coding-setup.md` now exists (written by T0.1, see `docs/notes/T0.1.md`).
-
-There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
+As of 2026-10-20 (main at the docs commit after `143a276`): the whole system is built and runs
+on kind with `make up`, and on k3s (k3d rehearsal) with `make prod-up`.
+- Gateway 0.4.14, woo-mcp 0.1.5, mock-mcp and everything-mcp 0.1.1.
+- Chat runs on DeepSeek v4.1 flash (OpenCode Go), with automatic fallback to Groq.
+- The definition-of-done flow passed 8 E2E rounds by separate tester sessions
+  (`docs/notes/E2E-2026-10-19*.md`). Both external clients were dry-run as user B: MCP Inspector
+  2.11.0 and Claude Code 2.1.304 (`docs/notes/DEMO-RUNBOOK.md`).
+- Docs: `README.md`, `docs/design-tradeoffs.md`, `docs/threat-model.md`.
+- Open: the VPS run (waiting on a VPS), the clean slate before recording, the demo video, and
+  submission.
 
 ---
 
@@ -43,14 +50,14 @@ There is no `t1-1/` folder in the repo. An earlier reference to it was stale.
 | P0 Environment + scaffold + Makefile skeleton | Done (T0.1→T0.5, notes docs/notes/T0.1.md) |
 | P1 Store on K8s | Done (C1 met: checkout order 12, persistence, reset; T1.6) |
 | P2 Woo MCP server | Done (5 tools live, OAuth client, netpol pair; docs/woo-store-access.md) |
-| P3 Gateway core (+ mock-mcp first) | Partial: T3.0–T3.3 + T3.6 done. NEXT: T3.4/T3.5 (agent writes, human reviews; HANDOFF.md) |
-| P4 Users, keys, roles, audit | Not started |
-| P5 Dashboard | Not started |
-| P6 Chat agent | Not started |
-| P7 Third upstream + failure demos | Not started |
-| P8 DoD run-through (twice) | Not started |
-| P9 Docs, prod values, demo video | Not started |
-| Stretch: T11.1 + T11.2 (D12) | Not started |
+| P3 Gateway core (+ mock-mcp first) | Built and verified, awaiting human confirmation (C2 met 2026-10-14; aggregation, routing, timeouts enforced per request) |
+| P4 Users, keys, roles, audit | Built and verified, awaiting human confirmation (hashed keys, roles, audit; login hardening bug 6) |
+| P5 Dashboard | Built and verified, awaiting human confirmation (React/Vite: Servers, Team & Keys, Audit, Chat) |
+| P6 Chat agent | Built and verified, awaiting human confirmation (tool loop, acts as user, D28 guard, automatic LLM fallback) |
+| P7 Third upstream + failure demos | Built and verified, awaiting human confirmation (everything-mcp; Unreachable in about 10s; E2E round 8) |
+| P8 DoD run-through (twice) | Verified in 8 E2E rounds (2026-10-19/20), awaiting human confirmation |
+| P9 Docs, prod values, demo video | Docs and prod values done (k3d rehearsal); VPS run, clean slate and video still open |
+| Stretch: T11.1 + T11.2 (D12) | Built: tool permissions (T11.1), security hardening (T11.2: SSRF guard, encryption at rest, netpols, headers); awaiting human confirmation |
 
 ---
 
@@ -350,7 +357,7 @@ Write the notes as you finish the phases they describe, so Oct 22 is polish, not
 9. Repo layout.
 10. Links: design and tradeoffs, threat model, MCP internals, stretch items implemented.
 
-Write each section's commands only after running them on the PC. Anything not yet run stays marked `TODO(verify)`.
+Write each section's commands only after running them on the PC. Anything not yet run is labelled "not verified" or "not executed".
 
 ---
 
@@ -372,14 +379,21 @@ Answered earlier: Q3 tool naming (D5), Q5 mock upstreams visible (P5), Q9 stretc
 
 ## 12. In flight
 
-P0–P3 done. Gateway live: user keys, cached aggregation, `/mcp` routing
-(11 tools, woo+mock+everything Connected). **C2 met 2026-10-14:** MCP
-Inspector v2.11.0 over ingress with a member key — 11 tools in 24ms,
-`mock__convert_currency` call in 31ms. WSL2 `/etc/hosts` now maps
-`app/shop.localhost` (CLI tools could not resolve them before).
-Hand-written zones lifted by the human 2026-10-14; agent writes, human reviews.
+2026-10-20: everything in the DoD is built and verified on kind and on k3s (k3d). Remaining, in
+order:
+1. **Clean slate before recording** (human approves each step):
+   - revoke B's old active keys, including `b455739e`, which is stored in plain text in
+     `~/.mcp-inspector/mcp.json`;
+   - optionally delete the test products and orders and the `e2e-admin` user;
+   - rotate the A and B passwords.
+2. **VPS run** when a VPS is available: README section 7 has the steps; fill in the commands
+   actually run.
+3. **Record the demo** with `docs/notes/DEMO-RUNBOOK.md`, then submit by 2026-10-22.
 
-**Next: audit log, then dashboard login, then chat loop (C3).**
+Pending human decisions:
+- delete the stopped k3d clusters `urumi-prod2` and `urumi-prod3`;
+- GHCR push for the VPS;
+- the low router item (a malformed `/mcp` body without a key gets 400 before 401).
 
 ---
 
@@ -394,7 +408,7 @@ Hand-written zones lifted by the human 2026-10-14; agent writes, human reviews.
 
 ---
 
-## 14. Verification notes (as of 2026-10-10)
+## 14. Verification notes (started 2026-10-10, updated 2026-10-20)
 
 **Verified**
 
@@ -408,17 +422,28 @@ Hand-written zones lifted by the human 2026-10-14; agent writes, human reviews.
 8. **WooCommerce 11.2.1 over plain HTTP: Basic AND query-string ck/cs both 401** (verified live). Only OAuth 1.0a one-legged works. Plus the double-encoding quirk: `join_with_equals_sign()` re-encodes the joined `k=v`, so ISO datetimes fail while plain dates pass. `woo.ts:signedPair` replicates it; proven by real `list_orders(after=...)` returning order 12.
 9. **SDK 1.32.1 speaks spec 2025-11-25, not 2026-07-28** (`npm view` + types.js; 2026-07-28 is v2-only). Staying on 1.x per decision; zod 4.6.5 satisfies its `^3.25 || ^4.0` peer range.
 10. **`helm.sh/resource-policy: keep` verified with Helm v4.3.0** (T1.5): PVCs + Secrets survived `helm uninstall`, reinstall reused the DB password, product survived. `make reset` (`kind delete cluster`) verified to wipe everything.
-11. **Upstream credential path verified live** (T2.4/T3.3): static bearer via `requestInit.headers.Authorization` works against our servers; `requestInit` exists on the 1.x client transport. Health loop flips Connected→Unreachable on scale-to-0 (~50s stock, ~15s with 10s grace) and back.
+11. **Upstream credential path verified live** (T2.4/T3.3): static bearer via `requestInit.headers.Authorization` works against our servers; `requestInit` exists on the 1.x client transport. Health loop flips Connected→Unreachable on scale-to-0 (~50s stock, ~15s with 10s grace) and back. (Superseded 2026-10-19: about 10s since the timeout and SIGTERM fixes.)
 12. **K8s RBAC: `resourceNames` is ignored on `create`** — real POST 403s while `kubectl auth can-i` says yes. Role grants bare `create` (namespace-bounded) + name-scoped get/delete.
 13. **Mount PVCs ON the image's VOLUME path, never its parent (2026-10-13).** The postgres chart mounted at `/var/lib/postgresql` while the image declares `VOLUME .../data` → double mount, postgres wrote to ephemeral storage, first container restart wiped the gateway DB (initdb ran fresh). Fix: mount at `/var/lib/postgresql/data`. MariaDB/WP were correct (single mounts). Verify with `/proc/mounts`, not assumptions.
-14. **C2 met 2026-10-14 (gateway 0.2.0).** `/mcp` serves 11 prefixed tools across woo+mock+everything; curl: clean 401 no/bad key, `initialize` 2025-11-25, `tools/call` routes to all three (real Woo products returned), unknown → -32602. SDK client via gateway: 11 tools + call. Inspector v2.11.0 over ingress with member key: 11 tools in 24ms, `mock__convert_currency` 100 USD→EUR = 92 in 31ms. Key revoke round-trip verified. Hand-written zones lifted by human; agent writes, human reviews.
+14. **C2 met 2026-10-14 (gateway 0.2.0).** `/mcp` serves 11 prefixed tools across woo+mock+everything; curl: clean 401 no/bad key, `initialize` 2025-11-25, `tools/call` routes to all three (real Woo products returned), unknown → -32602. SDK client via gateway: 11 tools + call. Inspector v2.11.0 over ingress with member key: 11 tools (superseded: members see 9 since T11.1) in 24ms, `mock__convert_currency` 100 USD→EUR = 92 in 31ms. Key revoke round-trip verified. Hand-written zones lifted by human; agent writes, human reviews.
 15. **WSL2 CLI DNS (2026-10-14).** WSL2 does not resolve `*.localhost` via the Windows resolver for all CLI tools; mapping `127.0.0.1 app.localhost shop.localhost` in WSL2 `/etc/hosts` fixed Node/Inspector CLI access to the ingress. Browsers were unaffected.
+
+16. **Chat providers return tool calls in the loop's shape (2026-10-17 to 10-20).** Gemini `gemini-3.8-flash` (needs `extra_content.thought_signature` echoed), Groq `qwen/qwen3.8-27b` and DeepSeek `deepseek-v4.1-flash` on OpenCode Go (needs `x-opencode-session`). A two-turn loop and automatic failover were verified live against DeepSeek and Groq.
+17. **Claude Code 2.1.304 works as an HTTP MCP client with a static `Authorization` header (2026-10-20).** It answered "orders today" and the two-server prompt as member B, with audit rows under B. Inspector 2.11.0 CLI was re-verified the same day (9 member tools, `count`/`total`).
+18. **The MCP SDK 1.32.1 transport ignores `requestInit.signal` (2026-10-19).** Only the per-request `signal` option is honoured. Before the fix, probes hung 13-65s on a hanging upstream; now they end at our timeout (unit tests with a never-answering server).
+19. **k3s differs from kind in ways that broke production:**
+    - kube-router allow-lists a new pod's IP 1-2s late;
+    - Traefik runs in `kube-system`;
+    - WordPress canonical and SSL redirects break HTTP probes.
+
+    All are fixed; see `docs/notes/P4-k3d.md`.
+20. **Node as PID 1 ignores SIGTERM (2026-10-19, E2E M3, `bdce674`).** A scaled-down pod kept serving for its whole grace period; the gateway and mcp-mini now handle SIGTERM.
 
 **Not yet verified (check before relying on them)**
 
-- Gemini's and Ollama's OpenAI-compatible endpoints both return tool calls in the shape the loop expects (T6.1). Early key/model smoke test due before Oct 14 (R4) — now overdue, do before the chat loop.
-- Claude Code handles the 401 and `/.well-known` 404 behaviour as described (T3.7). Inspector proven; Claude Code still to prove.
-- Whether Ollama's OpenAI-compatible endpoint returns tool calls in the same shape as Gemini's (T6.1).
+- Ollama's OpenAI-compatible endpoint returns tool calls in the same shape (not tested; Ollama is only a documented option).
+- Cursor as an MCP client (not tested; the README says so).
+- The VPS: real DNS, TLS issuance, and whether the login limiter sees real client IPs behind klipper-lb.
 
 ---
 

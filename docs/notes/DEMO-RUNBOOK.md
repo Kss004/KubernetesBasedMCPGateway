@@ -16,9 +16,10 @@ Every step below was dry-run on 2026-10-20 at gateway 0.4.14:
    grep -q 'app.localhost' /etc/hosts || echo '127.0.0.1 app.localhost shop.localhost' | sudo tee -a /etc/hosts
    ```
    `/etc/wsl.conf` has `generateHosts = false`, so it survives `wsl --shutdown`.
-3. Clean slate (see the cleanup list in the E2E notes):
+3. Clean slate (test data is listed in `docs/notes/E2E-2026-10-19.md` "Test data and hygiene", in the
+   "Test data" sections of rounds 2-4, and in `E2E-2026-10-19-round5-8.md`):
    - revoke B's old keys;
-   - rotate the A and B passwords: rerun the reset block, then `cat ~/.urumi-demo-creds`;
+   - rotate the A and B passwords with the password commands in README section 3, step 3;
    - remove the old `urumi-gateway` entry from `~/.mcp-inspector/mcp.json`. It holds B's old key
      `b455739e` in plain text.
 4. Chat model: DeepSeek v4.1 flash (OpenCode Go), with automatic Groq fallback. If chat says "the
@@ -124,6 +125,12 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://app.localhost/mcp -H "Au
 **Enable**: Connected again with 11 tools.
 
 ## 9. A dead server (failure demo)
+First show why deleting the pod is not enough: the Deployment recreates it within seconds, so
+the dashboard may never show Unreachable (D24).
+```bash
+kubectl -n urumi-upstreams delete pod -l app=everything-mcp      # comes back almost at once
+```
+Then take it down for real:
 ```bash
 kubectl -n urumi-upstreams scale deploy/upstreams-everything-mcp --replicas=0
 ```

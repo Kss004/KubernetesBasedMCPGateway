@@ -1,6 +1,6 @@
 # windows-coding-setup.md — PC (WSL2) setup, recorded from actual commands (T0.1)
 
-> Spec: `progrestillnow.md` §3. Values below are what `T0.1` actually ran/saw on 2026-10-09. Where actual differs from spec, actual wins and spec is flagged.
+> Spec: `progrestillnow.md` section 3. Values below are what `T0.1` actually ran/saw on 2026-10-09. Where actual differs from spec, actual wins and spec is flagged.
 
 ## 1. WSL2 + repo location
 
@@ -10,7 +10,7 @@
 
 ## 2. `.wslconfig` (actual, differs from spec)
 
-Spec §3 says `memory=20GB, processors=8, swap=8GB`. Actual file
+Spec section 3 says `memory=20GB, processors=8, swap=8GB`. Actual file
 `C:\Users\Shashwat\.wslconfig` (`/mnt/c/Users/Shashwat/.wslconfig`) contains:
 
 ```ini
