@@ -10,7 +10,7 @@ GW_RELEASE ?= gateway
 STORE_RELEASE ?= store
 UP_RELEASE ?= upstreams
 GATEWAY_IMG ?= gateway
-GATEWAY_TAG ?= 0.4.12
+GATEWAY_TAG ?= 0.4.13
 WOO_IMG ?= woo-mcp
 WOO_TAG ?= 0.1.5
 MOCK_IMG ?= mock-mcp
@@ -28,8 +28,8 @@ PROD_TLS_PORT ?= 8444
 PROD_APP ?= app.localhost
 PROD_SHOP ?= shop.localhost
 REGISTRY ?= ghcr.io/kss004/kubernetesbasedmcpgateway
-# Must match llm.secretName in charts/gateway/values.yaml (llm = Gemini).
-LLM_SECRET ?= llm-groq
+# Must match llm.secretName in charts/gateway/values.yaml (llm-groq = Groq, llm = Gemini).
+LLM_SECRET ?= llm-opencode
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -67,7 +67,7 @@ down: ## helm uninstall, keep data (PVCs/Secrets carry keep policy, D20)
 reset: ## Delete the kind cluster for a clean run (D19; dangerous: ask first)
 	kind delete cluster --name urumi
 
-secrets: ## Create the LLM key Secret (LLM_SECRET, default llm-groq) via kubectl, never in values
+secrets: ## Create the LLM key Secret (LLM_SECRET, default llm-opencode) via kubectl, never in values
 	@if [ -z "$(LLM_API_KEY)" ]; then echo "set LLM_API_KEY=... (never commit it)"; exit 1; fi
 	kubectl -n $(GW_NS) create secret generic $(LLM_SECRET) --from-literal=api-key="$(LLM_API_KEY)" --dry-run=client -o yaml | kubectl apply -f -
 

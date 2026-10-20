@@ -19,7 +19,7 @@ imagePullSecrets: []
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.4.12"
+gatewayTag: "0.4.13"
 
 storage:
   postgres: 5Gi
@@ -35,15 +35,17 @@ session:
   cookieSecure: false
 
 llm:
-  # D10 (revised 2026-10-19): Groq primary, since Gemini chat completions hung (60s+
-  # timeouts) while Groq answered in 0.2s. Any OpenAI-compatible endpoint works;
-  # switching is these three values. Gemini fallback:
-  #   baseUrl https://generativelanguage.googleapis.com/v1beta/openai,
-  #   model gemini-3.8-flash, secretName llm.
-  # Ollama fallback: baseUrl http://<host>:11434/v1 with a local model name.
+  # D10 (revised 2026-10-20): OpenCode Go DeepSeek primary; Groq's free tier refused about
+  # half the demo prompts. OpenCode Go targets coding agents and monitors traffic; the
+  # gateway identifies itself honestly (User-Agent + x-opencode-session). Any
+  # OpenAI-compatible endpoint works; switching is these three values:
+  #   Groq fallback:   baseUrl https://api.groq.com/openai/v1, model qwen/qwen3.8-27b, secretName llm-groq
+  #   Gemini fallback: baseUrl https://generativelanguage.googleapis.com/v1beta/openai,
+  #                    model gemini-3.8-flash, secretName llm
+  #   Ollama:          baseUrl http://<host>:11434/v1 with a local model name
   # The key is never a value: `make secrets` creates the out-of-band Secret.
-  baseUrl: "https://api.groq.com/openai/v1"
-  model: "qwen/qwen3.8-27b"
+  baseUrl: "https://opencode.ai/zen/go/v1"
+  model: "deepseek-v4.1-flash" # listed by GET /v1/models for this key on 2026-10-20
   # Secret (key: api-key) holding the provider key; one Secret per provider:
-  # llm-groq (Groq), llm (Gemini).
-  secretName: "llm-groq"
+  # llm-opencode (OpenCode Go), llm-groq (Groq), llm (Gemini).
+  secretName: "llm-opencode"
