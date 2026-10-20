@@ -38,9 +38,9 @@ llm:
   # D10 (revised 2026-10-20): OpenCode Go DeepSeek primary; Groq's free tier refused about
   # half the demo prompts. OpenCode Go targets coding agents and monitors traffic; the
   # gateway identifies itself honestly (User-Agent + x-opencode-session). Any
-  # OpenAI-compatible endpoint works; switching is these three values:
-  #   Groq fallback:   baseUrl https://api.groq.com/openai/v1, model qwen/qwen3.8-27b, secretName llm-groq
-  #   Gemini fallback: baseUrl https://generativelanguage.googleapis.com/v1beta/openai,
+  # OpenAI-compatible endpoint works; switching the primary is these three values:
+  #   Groq:            baseUrl https://api.groq.com/openai/v1, model qwen/qwen3.8-27b, secretName llm-groq
+  #   Gemini:          baseUrl https://generativelanguage.googleapis.com/v1beta/openai,
   #                    model gemini-3.8-flash, secretName llm
   #   Ollama:          baseUrl http://<host>:11434/v1 with a local model name
   # The key is never a value: `make secrets` creates the out-of-band Secret.
@@ -49,3 +49,9 @@ llm:
   # Secret (key: api-key) holding the provider key; one Secret per provider:
   # llm-opencode (OpenCode Go), llm-groq (Groq), llm (Gemini).
   secretName: "llm-opencode"
+  # Automatic fallback: used when the primary fails (timeout, 4xx/5xx, rate limit after one
+  # retry); that request stays on it and the primary rests 60s. Empty baseUrl turns it off.
+  fallback:
+    baseUrl: "https://api.groq.com/openai/v1"
+    model: "qwen/qwen3.8-27b"
+    secretName: "llm-groq"

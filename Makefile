@@ -30,6 +30,8 @@ PROD_SHOP ?= shop.localhost
 REGISTRY ?= ghcr.io/kss004/kubernetesbasedmcpgateway
 # Must match llm.secretName in charts/gateway/values.yaml (llm-groq = Groq, llm = Gemini).
 LLM_SECRET ?= llm-opencode
+# Must match llm.fallback.secretName (automatic fallback provider).
+LLM_FALLBACK_SECRET ?= llm-groq
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -47,6 +49,7 @@ up: ## Create cluster, install ingress, build+load images, secrets, helm install
 	kubectl create ns $(STORE_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create ns $(UP_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl -n $(GW_NS) get secret $(LLM_SECRET) >/dev/null 2>&1 || kubectl -n $(GW_NS) create secret generic $(LLM_SECRET) --from-literal=api-key=placeholder-change-me
+	kubectl -n $(GW_NS) get secret $(LLM_FALLBACK_SECRET) >/dev/null 2>&1 || kubectl -n $(GW_NS) create secret generic $(LLM_FALLBACK_SECRET) --from-literal=api-key=placeholder-change-me
 	helm upgrade --install $(STORE_RELEASE) ./charts/store -n $(STORE_NS)
 	helm upgrade --install $(UP_RELEASE) ./charts/upstreams -n $(UP_NS)
 	helm upgrade --install $(GW_RELEASE) ./charts/gateway -n $(GW_NS)
@@ -92,6 +95,7 @@ prod-up: ## k3d cluster with values-prod.yaml; images retagged locally to GHCR n
 	k3d image import -c $(PROD_CLUSTER) $(addprefix $(REGISTRY)/,$(IMAGES))
 	for n in $(GW_NS) $(STORE_NS) $(UP_NS); do kubectl create ns $$n --dry-run=client -o yaml | kubectl apply -f -; done
 	kubectl -n $(GW_NS) get secret $(LLM_SECRET) >/dev/null 2>&1 || kubectl -n $(GW_NS) create secret generic $(LLM_SECRET) --from-literal=api-key=placeholder-change-me
+	kubectl -n $(GW_NS) get secret $(LLM_FALLBACK_SECRET) >/dev/null 2>&1 || kubectl -n $(GW_NS) create secret generic $(LLM_FALLBACK_SECRET) --from-literal=api-key=placeholder-change-me
 	# No --wait on the store: its post-install bootstrap creates the Secret woo-mcp needs.
 	helm upgrade --install $(STORE_RELEASE) ./charts/store -n $(STORE_NS) -f charts/store/values-prod.yaml --set storeHost=$(PROD_SHOP) --set storeUrl=http://$(PROD_SHOP):$(PROD_PORT) --timeout 10m
 	helm upgrade --install $(UP_RELEASE) ./charts/upstreams -n $(UP_NS) -f charts/upstreams/values-prod.yaml

@@ -68,6 +68,18 @@ spec:
             - name: LLM_API_KEY
               valueFrom:
                 secretKeyRef: { name: {{ .Values.llm.secretName | quote }}, key: api-key, optional: true }
+            {{- with .Values.llm.fallback }}
+            {{- if .baseUrl }}
+            # Automatic fallback when the primary fails (D10); empty baseUrl turns it off.
+            - name: LLM_FALLBACK_BASE_URL
+              value: {{ .baseUrl | quote }}
+            - name: LLM_FALLBACK_MODEL
+              value: {{ .model | quote }}
+            - name: LLM_FALLBACK_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .secretName | quote }}, key: api-key, optional: true }
+            {{- end }}
+            {{- end }}
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 256Mi }
