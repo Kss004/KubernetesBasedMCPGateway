@@ -433,3 +433,79 @@ describe('provider identity headers (OpenCode Go)', () => {
     assert.match(e.detail, /MissingSessionID/);
   });
 });
+
+describe('automatic LLM fallback (D10)', () => {
+  const P = 'https://primary.test/v1';
+  const F = 'https://fallback.test/v1';
+  const cfg = { baseUrl: P, model: 'deepseek', apiKey: 'kp', fallback: { baseUrl: F, model: 'groq', apiKey: 'kf' } };
+  const ok = (content: string) =>
+    new Response(JSON.stringify({ choices: [{ message: { content } }] }), { status: 200 });
+  // primary answers with `primary` (a status code or 'ok'); fallback answers 'from-fallback'.
+  const fake = (primary: number | 'ok', calls: string[]) =>
+    (async (url: string) => {
+      calls.push(url.startsWith(P) ? 'P' : 'F');
+      if (url.startsWith(F)) return ok('from-fallback');
+      return primary === 'ok' ? ok('from-primary') : new Response('{}', { status: primary, headers: { 'retry-after': '0' } });
+    }) as unknown as typeof fetch;
+  const msgs: LlmMessage[] = [{ role: 'user', content: 'hi' }];
+
+  it('a primary 5xx answers from the fallback and logs the failover', async () => {
+    const { makeLlmCaller, resetFailover } = await import('../src/chat.ts');
+    resetFailover();
+    const calls: string[] = [];
+    const logs: string[] = [];
+    const call = makeLlmCaller(cfg, [], fake(503, calls), 's', () => 0, (l) => logs.push(l));
+    assert.equal((await call(msgs)).content, 'from-fallback');
+    assert.deepEqual(calls, ['P', 'F']);
+    assert.match(logs[0], /llm failover: primary=deepseek error=llm 503 .*-> fallback=groq/);
+  });
+
+  it('a 429 that survives the retry fails over too', async () => {
+    const { makeLlmCaller, resetFailover } = await import('../src/chat.ts');
+    resetFailover();
+    const calls: string[] = [];
+    const call = makeLlmCaller(cfg, [], fake(429, calls), 's', () => 0, () => {});
+    assert.equal((await call(msgs)).content, 'from-fallback');
+    assert.deepEqual(calls, ['P', 'P', 'F']); // one retry on the primary, then the fallback
+  });
+
+  it('stays on the fallback for the rest of the request and rests the primary for 60s', async () => {
+    const { makeLlmCaller, resetFailover, FAILOVER_COOLDOWN_MS } = await import('../src/chat.ts');
+    resetFailover();
+    let t = 1000;
+    const calls: string[] = [];
+    const first = makeLlmCaller(cfg, [], fake(500, calls), 's', () => t, () => {});
+    await first(msgs);
+    await first(msgs); // same request, next turn: no primary call
+    assert.deepEqual(calls, ['P', 'F', 'F']);
+    calls.length = 0;
+    const second = makeLlmCaller(cfg, [], fake('ok', calls), 's', () => t, () => {});
+    await second(msgs); // another request during the cool-down: primary skipped
+    assert.deepEqual(calls, ['F']);
+    t += FAILOVER_COOLDOWN_MS + 1;
+    calls.length = 0;
+    const third = makeLlmCaller(cfg, [], fake('ok', calls), 's', () => t, () => {});
+    assert.equal((await third(msgs)).content, 'from-primary'); // primary tried again
+    assert.deepEqual(calls, ['P']);
+  });
+
+  it('without a fallback, behaves as before; if both fail, the error surfaces', async () => {
+    const { makeLlmCaller, resetFailover } = await import('../src/chat.ts');
+    resetFailover();
+    const { fallback: _f, ...noFb } = cfg;
+    await assert.rejects(makeLlmCaller(noFb, [], fake(503, []), 's', () => 0, () => {})(msgs), /llm 503/);
+    resetFailover();
+    const bothDown = (async () => new Response('{}', { status: 502 })) as unknown as typeof fetch;
+    await assert.rejects(makeLlmCaller(cfg, [], bothDown, 's', () => 0, () => {})(msgs), /llm 502/);
+  });
+
+  it('loadLlmConfig enables the fallback only when all three values are set', async () => {
+    const { loadLlmConfig } = await import('../src/chat.ts');
+    const base = { LLM_BASE_URL: P, LLM_MODEL: 'deepseek', LLM_API_KEY: 'kp' };
+    assert.equal(loadLlmConfig(base).fallback, undefined);
+    assert.equal(loadLlmConfig({ ...base, LLM_FALLBACK_BASE_URL: F, LLM_FALLBACK_MODEL: 'groq' }).fallback, undefined);
+    assert.deepEqual(loadLlmConfig({ ...base, LLM_FALLBACK_BASE_URL: F, LLM_FALLBACK_MODEL: 'groq', LLM_FALLBACK_API_KEY: 'kf' }).fallback, {
+      baseUrl: F, model: 'groq', apiKey: 'kf',
+    });
+  });
+});

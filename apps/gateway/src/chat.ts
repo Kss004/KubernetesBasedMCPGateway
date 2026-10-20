@@ -16,10 +16,13 @@ import { CALL_TIMEOUT_MS, capResult, grantsAllow, isToolError } from './router.j
 
 export const MAX_TURNS = 8;
 
-export interface LlmConfig {
+export interface LlmEndpoint {
   baseUrl: string;
   model: string;
   apiKey: string;
+}
+export interface LlmConfig extends LlmEndpoint {
+  fallback?: LlmEndpoint; // used automatically when the primary fails (D10)
 }
 
 export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {
@@ -27,7 +30,12 @@ export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {
   const model = (env.LLM_MODEL ?? '').trim();
   const apiKey = (env.LLM_API_KEY ?? '').trim();
   if (!baseUrl || !model || !apiKey) throw Object.assign(new Error('chat not configured'), { status: 503 });
-  return { baseUrl, model, apiKey };
+  const fb = {
+    baseUrl: (env.LLM_FALLBACK_BASE_URL ?? '').trim(),
+    model: (env.LLM_FALLBACK_MODEL ?? '').trim(),
+    apiKey: (env.LLM_FALLBACK_API_KEY ?? '').trim(),
+  };
+  return { baseUrl, model, apiKey, ...(fb.baseUrl && fb.model && fb.apiKey ? { fallback: fb } : {}) };
 }
 
 // The model does not know what "today" means, so pin date + timezone (T6.2);
@@ -153,9 +161,10 @@ export const conversationId = (userId: string, messages: LlmMessage[]): string =
 export async function chatCompletions(
   messages: LlmMessage[],
   llmTools: unknown[],
-  cfg: LlmConfig,
+  cfg: LlmEndpoint,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
   sessionId?: string,
+  timeoutMs = 60000,
 ): Promise<LlmTurn> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   let resp: Response;
@@ -176,7 +185,7 @@ export async function chatCompletions(
           messages,
           ...(llmTools.length > 0 ? { tools: llmTools, tool_choice: 'auto' } : {}),
         }),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (e) {
       throw Object.assign(new Error(`llm unreachable: ${(e as Error).message}`), { status: 502 });
@@ -233,6 +242,49 @@ export const NUDGE =
   'Your last answer stated store data without calling a tool in this reply. Call the matching tool now and answer only from its result.';
 export const RATE_LIMITED = 'The model is busy right now (rate-limited). Please try again in a few seconds.';
 export const FALLBACK = "I couldn't look that up with the store tools. Please ask again.";
+
+// Automatic fallback (D10): a provider error from the primary (unreachable, timeout, 4xx/5xx,
+// or 429 after its one retry) switches to the fallback. The rest of that request stays on the
+// fallback, so providers never alternate inside one tool loop, and the primary rests for
+// FAILOVER_COOLDOWN_MS so every user isn't waiting on a broken provider.
+// ponytail: the cool-down is per pod and resets on restart; upgrade to shared state when the
+// gateway runs more than one replica.
+export const FAILOVER_COOLDOWN_MS = 60_000;
+const PRIMARY_TIMEOUT_WITH_FALLBACK_MS = 20_000;
+let primaryRestingUntil = 0;
+export const resetFailover = (): void => {
+  primaryRestingUntil = 0;
+};
+
+export function makeLlmCaller(
+  cfg: LlmConfig,
+  llmTools: unknown[],
+  fetchImpl: typeof globalThis.fetch,
+  sessionId: string,
+  now: () => number = Date.now,
+  log: (line: string) => void = console.error,
+): (messages: LlmMessage[]) => Promise<LlmTurn> {
+  let onFallback = false;
+  return async (messages) => {
+    const fb = cfg.fallback;
+    if (!fb) return chatCompletions(messages, llmTools, cfg, fetchImpl, sessionId);
+    if (onFallback || now() < primaryRestingUntil) {
+      onFallback = true;
+      return chatCompletions(messages, llmTools, fb, fetchImpl, sessionId);
+    }
+    try {
+      return await chatCompletions(messages, llmTools, cfg, fetchImpl, sessionId, PRIMARY_TIMEOUT_WITH_FALLBACK_MS);
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (status !== 502 && status !== 429) throw e;
+      primaryRestingUntil = now() + FAILOVER_COOLDOWN_MS;
+      onFallback = true;
+      const detail = (e as { detail?: string }).detail;
+      log(`llm failover: primary=${cfg.model} error=${(e as Error).message}${detail ? ` ${detail.slice(0, 200)}` : ''} -> fallback=${fb.model}`);
+      return chatCompletions(messages, llmTools, fb, fetchImpl, sessionId);
+    }
+  };
+}
 
 export async function driveLoop(deps: {
   messages: LlmMessage[];
@@ -325,6 +377,7 @@ export async function handleChat(opts: {
   ];
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
   const sessionId = conversationId(opts.user.id, messages);
+  const callLlm = makeLlmCaller(cfg, llmTools, fetchImpl, sessionId);
   let gone = false; // browser disconnected mid-loop: stop spending LLM and tool calls
   res.on('close', () => {
     gone = !res.writableEnded;
@@ -348,7 +401,7 @@ export async function handleChat(opts: {
       messages,
       callLlm: (ms) => {
         if (gone) throw new Error('client disconnected');
-        return chatCompletions(ms, llmTools, cfg, fetchImpl, sessionId);
+        return callLlm(ms);
       },
       callTool: async (name, argsText) => {
         emit('tool', { name, status: 'start' });
