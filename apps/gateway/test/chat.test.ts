@@ -409,3 +409,27 @@ describe('rate-limit log detail (E2E round 7)', () => {
     assert.ok(!e.detail.includes('x-other'));
   });
 });
+
+describe('provider identity headers (OpenCode Go)', () => {
+  it('sends our own user agent and a stable per-conversation session id', async () => {
+    const { conversationId, USER_AGENT } = await import('../src/chat.ts');
+    const turn1: LlmMessage[] = [{ role: 'system', content: 's' }, { role: 'user', content: 'orders today?' }];
+    const turn2: LlmMessage[] = [...turn1, { role: 'assistant', content: '2 orders' }, { role: 'user', content: 'and yesterday?' }];
+    assert.equal(conversationId('u1', turn1), conversationId('u1', turn2));
+    assert.notEqual(conversationId('u1', turn1), conversationId('u2', turn1));
+    let seen: Record<string, string> = {};
+    const cfg = { baseUrl: 'https://llm.test/v1', model: 'm', apiKey: 'k' };
+    await chatCompletions(turn1, [], cfg, (async (_u: string, init: RequestInit) => {
+      seen = init.headers as Record<string, string>;
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
+    }) as unknown as typeof fetch, 'sess-1');
+    assert.equal(seen['User-Agent'], USER_AGENT);
+    assert.equal(seen['x-opencode-session'], 'sess-1');
+  });
+  it('a non-429 provider error keeps its text for the log', async () => {
+    const cfg = { baseUrl: 'https://llm.test/v1', model: 'm', apiKey: 'k' };
+    const e = await chatCompletions([], [], cfg, (async () => new Response('{"error":"MissingSessionID"}', { status: 400 })) as typeof fetch).catch((x) => x);
+    assert.equal(e.message, 'llm 400');
+    assert.match(e.detail, /MissingSessionID/);
+  });
+});

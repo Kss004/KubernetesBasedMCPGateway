@@ -6,7 +6,7 @@
 // Gemini primary, Ollama fallback via LLM_BASE_URL/LLM_MODEL/LLM_API_KEY
 // (key Secret-mounted out-of-band, never in values).
 import type http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Pool as PgPool } from 'pg';
 import { z } from 'zod';
 import { logCall } from './audit.js';
@@ -140,11 +140,22 @@ export interface LlmTurn {
 export const stripThinking = (s: string): string =>
   s.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
 
+// Honest client identity for providers that ask for it (OpenCode Go: own user agent plus a
+// stable per-conversation x-opencode-session). Other providers ignore both headers.
+export const USER_AGENT = 'urumi-gateway/0.4';
+// Same id on every turn of a conversation with no stored state: hash of user + first message.
+export const conversationId = (userId: string, messages: LlmMessage[]): string =>
+  createHash('sha256')
+    .update(`${userId}\n${messages.find((m) => m.role === 'user')?.content ?? ''}`)
+    .digest('hex')
+    .slice(0, 32);
+
 export async function chatCompletions(
   messages: LlmMessage[],
   llmTools: unknown[],
   cfg: LlmConfig,
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
+  sessionId?: string,
 ): Promise<LlmTurn> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   let resp: Response;
@@ -154,7 +165,12 @@ export async function chatCompletions(
     try {
       resp = await fetchImpl(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${cfg.apiKey}`,
+          'User-Agent': USER_AGENT,
+          ...(sessionId ? { 'x-opencode-session': sessionId } : {}),
+        },
         body: JSON.stringify({
           model: cfg.model,
           messages,
@@ -177,7 +193,11 @@ export async function chatCompletions(
       .join(' ');
     throw Object.assign(new Error(RATE_LIMITED), { status: 429, detail });
   }
-  if (!resp.ok) throw Object.assign(new Error(`llm ${resp.status}`), { status: 502 });
+  if (!resp.ok) {
+    // Provider error text goes to the log only (a bare "llm 400" hid OpenCode's MissingSessionID).
+    const detail = (await resp.text().catch(() => '')).slice(0, 200);
+    throw Object.assign(new Error(`llm ${resp.status}`), { status: 502, detail });
+  }
   const json = (await resp.json()) as {
     choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
   };
@@ -304,6 +324,7 @@ export async function handleChat(opts: {
     ...parsed.data.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   ];
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+  const sessionId = conversationId(opts.user.id, messages);
   let gone = false; // browser disconnected mid-loop: stop spending LLM and tool calls
   res.on('close', () => {
     gone = !res.writableEnded;
@@ -327,7 +348,7 @@ export async function handleChat(opts: {
       messages,
       callLlm: (ms) => {
         if (gone) throw new Error('client disconnected');
-        return chatCompletions(ms, llmTools, cfg, fetchImpl);
+        return chatCompletions(ms, llmTools, cfg, fetchImpl, sessionId);
       },
       callTool: async (name, argsText) => {
         emit('tool', { name, status: 'start' });
