@@ -19,6 +19,7 @@ TOKEN=$(kubectl -n "$GW_NS" get secret "$GW_RELEASE-admin" -o jsonpath='{.data.t
 
 check "dashboard / is the React shell" bash -c "curl -s $PROTO://$APP/ | grep -q 'id=\"root\"'"
 check "dashboard /app.js served as JS" bash -c "[[ \$(curl -s -o /dev/null -w '%{content_type}' $PROTO://$APP/app.js) == application/javascript* ]]"
+check "dashboard font served as woff2" bash -c "[[ \$(curl -s -o /dev/null -w '%{content_type}' $PROTO://$APP/fonts/jetbrains-mono-latin-wght-normal.woff2) == font/woff2 ]]"
 check "dashboard /style.css served as CSS" bash -c "[[ \$(curl -s -o /dev/null -w '%{content_type}' $PROTO://$APP/style.css) == text/css* ]]"
 check "/api/me without session is 401" test "$(code "$PROTO://$APP/api/me")" = 401
 check "/mcp without key is 401" test "$(code -X POST "$PROTO://$APP/mcp" -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = 401

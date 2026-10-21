@@ -16,6 +16,7 @@ import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 import { listAudit } from './audit.js';
 import { errStatus, errMessage } from './errors.js';
+import { loadDashFiles, type DashFile } from './dashboard.js';
 import {
   hashPassword,
   checkPassword,
@@ -143,23 +144,7 @@ const dashDir = (() => {
   }
   return null;
 })();
-const dashFiles = new Map<string, { buf: Buffer; type: string; etag: string }>();
-if (dashDir) {
-  const entries: Array<[string, string, string]> = [
-    ['/', 'index.html', 'text/html; charset=utf-8'],
-    ['/index.html', 'index.html', 'text/html; charset=utf-8'],
-    ['/app.js', 'app.js', 'application/javascript; charset=utf-8'],
-    ['/style.css', 'style.css', 'text/css; charset=utf-8'],
-  ];
-  for (const [url, file, type] of entries) {
-    try {
-      const buf = fs.readFileSync(path.join(dashDir, file));
-      dashFiles.set(url, { buf, type, etag: `"${createHash('sha256').update(buf).digest('hex').slice(0, 16)}"` });
-    } catch {
-      // leave unmapped; GET / then 503s instead of serving a partial app
-    }
-  }
-}
+const dashFiles = dashDir ? loadDashFiles(dashDir) : new Map<string, DashFile>();
 
 // Bug 6: security headers on every response (dashboard, API, /mcp). The Vite build has no
 // inline scripts or styles and loads nothing cross-origin, so CSP needs no exceptions;

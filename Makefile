@@ -1,4 +1,4 @@
-.PHONY: help up images down reset secrets seed test-netpol smoke e2e prod-up prod-check prod-down
+.PHONY: help up fonts images down reset secrets seed test-netpol smoke e2e prod-up prod-check prod-down
 
 # Release/namespace names match scripts/seed.sh defaults (GW_NS, STORE_RELEASE,
 # GW_RELEASE). Image tags must stay in sync with charts/*/values.yaml.
@@ -56,7 +56,11 @@ up: ## Create cluster, install ingress, build+load images, secrets, helm install
 	kubectl -n $(GW_NS) wait --for=condition=available deploy/$(GW_RELEASE)-gateway --timeout=180s
 	GW_NS="$(GW_NS)" STORE_NS="$(STORE_NS)" STORE_RELEASE="$(STORE_RELEASE)" GW_RELEASE="$(GW_RELEASE)" bash scripts/seed.sh
 
+fonts: ## Fetch Switzer from Fontshare (FFL: self-host only, never committed)
+	bash scripts/fetch-fonts.sh
+
 images: ## Build the four service images locally
+	@bash scripts/fetch-fonts.sh || echo "fonts: Switzer fetch failed; the dashboard falls back to system fonts"
 	docker build -t $(GATEWAY_IMG):$(GATEWAY_TAG) -f apps/gateway/Dockerfile .
 	docker build -t $(WOO_IMG):$(WOO_TAG) -f apps/woo-mcp/Dockerfile .
 	docker build -t $(MOCK_IMG):$(MOCK_TAG) -f apps/mock-mcp/Dockerfile .

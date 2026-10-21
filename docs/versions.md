@@ -57,6 +57,13 @@ Decision: ingress-nginx upstream repo is **archived (read-only since Mar 2026)**
 | mariadb | `11.8` | Hub API `.../library/mariadb/tags/11.8` → `last_updated: 2026-10-02` |
 | WooCommerce plugin | **11.2.1** (install exact zip in bootstrap Job, never `latest`) | WP.org API `plugins/info/1.2/?action=plugin_information&slug=woocommerce` → `version: 11.2.1, requires: 7.0, tested: 7.1.3` — matches WP 7.1.3 |
 
+## Dashboard fonts (2026-10-21)
+
+| Font | Source | Licence | Evidence |
+|---|---|---|---|
+| JetBrains Mono (variable) | npm `@fontsource-variable/jetbrains-mono` **5.3.0**, bundled by Vite into `dist/fonts/` | OFL-1.1 | `npm view @fontsource-variable/jetbrains-mono version license` |
+| Switzer (variable, roman + italic) | Fontshare zip `https://api.fontshare.com/v2/fonts/download/switzer`, fetched by `scripts/fetch-fonts.sh` (`make fonts`, also run by `make images`) | ITF Free Font License 2.0 (17 Aug 2026): self-hosting allowed; redistribution, including a public repo, and modification are not. Files are gitignored and copied unmodified | `Switzer_Complete/License/FFL.txt` in the zip |
+
 ## Calico
 
 Not pinned. Only needed if T1.1 shows kindnet policies are not enforced — the T1.1 test result is the authority, not a version note.

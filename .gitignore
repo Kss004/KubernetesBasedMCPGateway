@@ -31,3 +31,6 @@ __pycache__/
 
 # local review notes, never commit
 bugs.md
+
+# Switzer (ITF FFL): self-hosting allowed, redistribution not; fetched by `make fonts`
+apps/dashboard/public/fonts/

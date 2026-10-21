@@ -7,10 +7,15 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
+    // Never inline assets as data: URLs; the CSP (default-src 'self') would block them.
+    assetsInlineLimit: 0,
     rolldownOptions: {
       output: {
         entryFileNames: 'app.js',
-        assetFileNames: 'style.css',
+        // Fonts keep their own names under fonts/ (the gateway lists that dir at boot);
+        // everything else is the single stylesheet.
+        assetFileNames: (a) =>
+          /\.woff2$/.test(a.names?.[0] ?? a.name ?? '') ? 'fonts/[name][extname]' : 'style.css',
         codeSplitting: false,
       },
     },
