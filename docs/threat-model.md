@@ -71,6 +71,10 @@ those four names on every server, not only woo and mock.
 
 This is also "what happens if an admin adds a malicious or compromised MCP server".
 
+The live deployment has one such server for real: DeepWiki (`deepwiki`), a public hosted MCP
+server we did not write. Its tool descriptions and results are treated like any other
+untrusted upstream's, under the limits below.
+
 **Contained:**
 - **Scope (SSRF guard, `egress.ts`):** a server URL is either a cluster Service in
   `urumi-store` / `urumi-upstreams` (by name), or a public `https` host. Rejected at once: IP

@@ -16,7 +16,8 @@ with values changes only.
 
  gateway ──Streamable HTTP, credential attached here only──► woo-mcp        (urumi-store)
                                                           ├─► mock-mcp       (urumi-upstreams)
-                                                          └─► everything-mcp (urumi-upstreams)
+                                                          ├─► everything-mcp (urumi-upstreams)
+                                                          └─► DeepWiki       (public https, mcp.deepwiki.com)
  woo-mcp ──WooCommerce REST (OAuth 1.0a, Service DNS)──► WordPress
  gateway chat ──► LLM (DeepSeek v4.1 flash on OpenCode Go, automatic fallback to Groq)
 ```
@@ -31,8 +32,9 @@ apps/gateway         MCP aggregator and router (/mcp), admin/users/keys/audit AP
 apps/dashboard       React (Vite) dashboard: Servers, Team & Keys, Audit, Chat
 apps/woo-mcp         the WooCommerce MCP server (5 tools) over the WooCommerce REST API
 apps/mock-mcp        upstream #2: deterministic tools (convert_currency, a colliding list_products, sleep_forever, break_me)
-apps/everything-mcp  upstream #3: echo/add, built into a pinned image
-apps/mcp-mini        shared stateless Streamable HTTP server shell used by the three upstreams
+apps/everything-mcp  upstream #3: echo/add (our own small server, not the official server-everything)
+apps/mcp-mini        shared stateless Streamable HTTP server shell used by mock-mcp and everything-mcp
+(upstream #4)        DeepWiki: a public hosted MCP server we did not write, registered by URL (no image here)
 charts/store         WordPress, MariaDB, woo-mcp, store bootstrap Job, NetworkPolicies
 charts/gateway       gateway Deployment, Postgres, Ingress, generated Secrets, NetworkPolicies
 charts/upstreams     mock-mcp and everything-mcp
@@ -82,7 +84,8 @@ This one command:
 2. installs ingress-nginx;
 3. builds the 4 service images and loads them into kind;
 4. creates the namespaces and placeholder LLM Secrets;
-5. installs the 3 charts and registers the 3 upstream servers (`make seed`).
+5. installs the 3 charts and registers the upstream servers (`make seed`): the 3 in-cluster ones,
+   plus DeepWiki when the cluster has internet (`DEEPWIKI_URL=` skips it).
 
 All other Secrets are created inside the cluster:
 - The database passwords, credential encryption key, session secret, admin token and the
@@ -180,8 +183,8 @@ Log in at http://app.localhost.
 ## 6. Connect an external MCP client
 
 Every client needs only the gateway URL `http://app.localhost/mcp` (Streamable HTTP) and a user's
-API key. Generate a key on **Team & Keys → Generate my key**; it is shown once. A member sees 7
-tools: the write tools `woo__create_product` and `woo__update_order_status`, and the failure-demo
+API key. Generate a key on **Team & Keys → Generate my key**; it is shown once. A member sees 10
+tools (14 for an admin): the write tools `woo__create_product` and `woo__update_order_status`, and the failure-demo
 tools `mock__sleep_forever` and `mock__break_me`, are admin-only, hidden from `tools/list` and
 rejected if called.
 

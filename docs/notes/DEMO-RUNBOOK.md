@@ -41,7 +41,8 @@ US test address. Expect "Order received". Note the number.
 
 ## 2. Admin sees the gateway (A)
 Log in as A, which opens the **Servers** tab. Show:
-- `woo`, `mock` and `everything` all **Connected**, 11 tools in total;
+- `woo`, `mock`, `everything` and `deepwiki` all **Connected**, 14 tools in total. `deepwiki` is a
+  public hosted MCP server we did not write, added by URL;
 - auth shows only "secret set" (no secret values).
 
 ## 3. Chat writes to the store (A, chat agent)
@@ -79,7 +80,7 @@ In the Inspector tab that opens, connect with:
 - header `Authorization: Bearer <B key>`
 
 Check the exact 2.11 UI labels when you open it.
-- **List tools**: 7 tools, prefixed `woo__`, `mock__`, `everything__`. There is **no**
+- **List tools**: 10 tools, prefixed `woo__`, `mock__`, `everything__`, `deepwiki__`. There is **no**
   `woo__create_product`, `woo__update_order_status`, `mock__sleep_forever` or `mock__break_me`
   (member role).
 - Call `woo__list_orders` with `after` = `<today>T00:00:00` and `before` = `<today>T23:59:59`.
@@ -124,7 +125,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://app.localhost/mcp -H "Au
 ## 8. Disable and re-enable a server (A)
 **Servers → Disable** `mock`: it shows Disabled at once and its tools are gone. Chat
 `Convert 100 USD to EUR.` gets one plain sentence, "no tool for that", with no tool call.
-**Enable**: Connected again with 11 tools.
+**Enable**: Connected again with 14 tools.
 
 ## 9. A dead server (failure demo)
 First show why deleting the pod is not enough: the Deployment recreates it within seconds, so

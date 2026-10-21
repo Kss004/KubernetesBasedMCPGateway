@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# T3.6 make seed: register woo, mock and everything through the gateway admin API.
+# T3.6 make seed: register woo, mock, everything (and DeepWiki, see seed.mjs) through the
+# gateway admin API. DEEPWIKI_URL= (empty) skips DeepWiki.
 # Reads the woo-mcp token with kubectl from this machine (the gateway never
 # gets RBAC into other namespaces). Idempotent: creates or updates the row.
 # The worker runs inside the gateway pod via kubectl exec (node is in the
@@ -16,4 +17,5 @@ kubectl -n "$GW_NS" exec "deploy/$GW_RELEASE-gateway" -- env "ADMIN=$ADMIN" "TOK
   "WOO_URL=http://$STORE_RELEASE-woo-mcp.$STORE_NS:3000/mcp" \
   "MOCK_URL=http://upstreams-mock-mcp.urumi-upstreams:3000/mcp" \
   "EVERYTHING_URL=http://upstreams-everything-mcp.urumi-upstreams:3000/mcp" \
+  "DEEPWIKI_URL=${DEEPWIKI_URL-https://mcp.deepwiki.com/mcp}" \
   node -e "$(<scripts/seed.mjs)"

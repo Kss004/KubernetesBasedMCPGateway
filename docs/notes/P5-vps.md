@@ -281,3 +281,12 @@ private or reserved address"), `https://169.254.169.254`, `http://mcp.deepwiki.c
 name. From the VPS, the guarded transport connects to `https://mcp.deepwiki.com/mcp` and lists
 its 3 tools. The 3 existing servers stay Connected. Unit tests 78 (10 new for the guard); smoke
 14/14, e2e 5/5.
+
+## Review fixes, round 3: a third-party upstream (2026-10-21)
+
+Registered DeepWiki (`https://mcp.deepwiki.com/mcp`, no credential) with `make seed`, which now
+adds it when the cluster has internet (`DEEPWIKI_URL=` skips it). Checked live: 4 servers
+Connected, 14 tools for an admin and 10 for a member; a member key called
+`deepwiki__read_wiki_structure` for `modelcontextprotocol/typescript-sdk` in about 2s, with an `ok`
+audit row under that member. smoke 14/14 (its "every enabled upstream is Connected" check now
+includes DeepWiki, so a DeepWiki outage fails that one check), e2e 5/5.

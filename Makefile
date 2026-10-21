@@ -78,7 +78,7 @@ secrets: ## Create the LLM key Secret (LLM_SECRET, default llm-opencode) via kub
 	@if [ -z "$(LLM_API_KEY)" ]; then echo "set LLM_API_KEY=... (never commit it)"; exit 1; fi
 	kubectl -n $(GW_NS) create secret generic $(LLM_SECRET) --from-literal=api-key="$(LLM_API_KEY)" --dry-run=client -o yaml | kubectl apply -f -
 
-seed: ## Register woo, mock, everything via admin API (woo token read with kubectl, T3.6)
+seed: ## Register woo, mock, everything (+ DeepWiki if online) via admin API (woo token read with kubectl, T3.6)
 	bash scripts/seed.sh
 
 test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1)
