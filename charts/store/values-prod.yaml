@@ -11,6 +11,7 @@ ingress:
   controllerNamespace: kube-system # k3s runs Traefik here
   controllerPodLabels: { app.kubernetes.io/name: traefik } # only Traefik, not all of kube-system
   tlsSecretName: "" # see the gateway chart; not exercised on k3d
+  certIssuer: letsencrypt-prod # see the gateway chart
   acmeHttp01: true # see the gateway chart
   httpsRedirect: true # see the gateway chart
   annotations: {}

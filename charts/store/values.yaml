@@ -14,6 +14,7 @@ ingress:
   controllerNamespace: ingress-nginx
   controllerPodLabels: {}
   tlsSecretName: "" # kubernetes.io/tls Secret in this namespace; empty = no tls block
+  certIssuer: "" # ClusterIssuer: the chart creates the Certificate for tlsSecretName (see the gateway chart)
   acmeHttp01: false # true when cert-manager HTTP-01 issues tlsSecretName here (see the gateway chart)
   httpsRedirect: false # Traefik + tlsSecretName: redirect http to https (see the gateway chart)
   annotations: {}

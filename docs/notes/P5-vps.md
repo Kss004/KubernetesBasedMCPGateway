@@ -39,7 +39,7 @@ make images     # then docker tag <img> ghcr.io/kss004/kubernetesbasedmcpgateway
 
 helm install cert-manager oci://quay.io/jetstack/charts/cert-manager --version v1.21.2 \
   --namespace cert-manager --create-namespace --set crds.enabled=true --wait
-kubectl apply -f <ClusterIssuers + Certificates below>
+kubectl apply -f <ClusterIssuers below>   # the Certificates come from the charts
 
 for n in urumi-gateway urumi-store urumi-upstreams; do kubectl create ns $n --dry-run=client -o yaml | kubectl apply -f -; done
 kubectl -n urumi-gateway create secret generic llm-opencode --from-literal=api-key=placeholder-change-me
@@ -69,18 +69,14 @@ spec:
     privateKeySecretRef: { name: letsencrypt-prod-account-key }
     solvers:
       - http01: { ingress: { ingressClassName: traefik } }
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata: { name: app-tls, namespace: urumi-gateway }   # shop-tls in urumi-store for $SHOP
-spec:
-  secretName: app-tls
-  dnsNames: [app.169-58-78-14.sslip.io]
-  issuerRef: { name: letsencrypt-prod, kind: ClusterIssuer }
 ```
 
-Staging first (issuer `(STAGING) Ersatz Emmer YR2`), then `issuerRef` patched to prod:
-issuer `Let's Encrypt YR1`, `notAfter=Jan 19 10:57:52 2027 GMT` for both hosts.
+The Certificates (`app-tls`, `shop-tls`) were first created by hand: staging first (issuer
+`(STAGING) Ersatz Emmer YR2`), then `issuerRef` patched to prod: issuer `Let's Encrypt YR1`,
+`notAfter=Jan 19 10:57:52 2027 GMT` for both hosts. They now come from the charts
+(`templates/certificate.yaml`, rendered when `ingress.tlsSecretName` and `ingress.certIssuer` are
+both set; `values-prod.yaml` sets `certIssuer: letsencrypt-prod`). The two hand-made objects were
+adopted into the releases without a reissue (see "Review fixes, round 4").
 
 ## Problems the VPS run found
 
@@ -290,3 +286,15 @@ Connected, 14 tools for an admin and 10 for a member; a member key called
 `deepwiki__read_wiki_structure` for `modelcontextprotocol/typescript-sdk` in about 2s, with an `ok`
 audit row under that member. smoke 14/14 (its "every enabled upstream is Connected" check now
 includes DeepWiki, so a DeepWiki outage fails that one check), e2e 5/5.
+
+## Review fixes, round 4: Certificates in the charts, crypto tests (2026-10-21)
+
+- `charts/{gateway,store}/templates/certificate.yaml` render the cert-manager Certificate from
+  `ingress.tlsSecretName` + `ingress.certIssuer`. The live `app-tls` and `shop-tls` (made by
+  hand) were adopted by adding the Helm ownership label and the two `meta.helm.sh/release-*`
+  annotations, then `helm upgrade` both releases. The rendered spec equals the live one, so
+  nothing was reissued: both stay at revision 2, `notAfter=2027-01-19T10:57:52Z`, no new
+  CertificateRequest. The ClusterIssuers stay cluster-wide objects created once, outside the
+  charts.
+- `apps/gateway/test/crypto.test.ts`: round trip, layout, fresh IV, wrong key, tampered IV /
+  ciphertext / tag, truncated blob, wrong key size. Unit tests 84.

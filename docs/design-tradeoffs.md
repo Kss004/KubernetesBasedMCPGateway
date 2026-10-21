@@ -21,7 +21,8 @@ from `progrestillnow.md` (section 5); the evidence is in `docs/notes/`.
   `tools/list_changed` notifications.
 - **TypeScript and Node 24 everywhere, the reference MCP SDK pinned to 1.x** (D1). No ORM, no
   LLM SDK, and one crypto dependency only: `bcryptjs` for passwords. Everything else is plain
-  SQL, plain `fetch` and Node `crypto`.
+  SQL, plain `fetch` and Node `crypto`. The one addition is `undici` (pinned to the version Node
+  bundles), so the SSRF guard can check each external upstream's IP at connect time.
 - **Postgres for gateway metadata** (servers, encrypted credentials, users, hashed keys, audit),
   so the gateway itself stays stateless (D4).
 - **woo-mcp talks to WooCommerce over its REST API** (OAuth 1.0a over in-cluster HTTP), not
@@ -87,7 +88,7 @@ The same charts are used; only values change (`charts/*/values-prod.yaml`, READM
 |---|---|
 | DNS and hosts | real `appHost` / `storeHost` (required values); `storeUrl: https://...` sets WP_HOME and WP_SITEURL (D21) |
 | Ingress | Traefik on k3s: `ingress.className: traefik`; NetworkPolicies admit only Traefik pods in `kube-system`; nginx-only annotations nulled |
-| TLS | `ingress.tlsSecretName` (cert-manager with Let's Encrypt, or a manual TLS Secret); `session.cookieSecure: true` |
+| TLS | `ingress.tlsSecretName` plus `ingress.certIssuer: letsencrypt-prod`: the chart creates the cert-manager `Certificate` (the ClusterIssuer is created once per cluster). Or leave `certIssuer` empty and bring your own TLS Secret. `session.cookieSecure: true` |
 | Storage class | `storage.className: local-path` on k3s; PVCs keep data across uninstalls (D20) |
 | Secrets | still generated in-chart; LLM keys created out-of-band with `make secrets`; `imagePullSecrets` for private GHCR images |
 | Images | `ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag>`, built with buildx |
@@ -97,6 +98,24 @@ rehearsed on k3s (k3d v5.9.0) with `make prod-up` / `make prod-check`: from zero
 at gateway 0.4.2 (2026-10-18), and the current build (0.4.14) on 2026-10-20. The k3s run found 6
 bugs, 4 of which kind hid; see `docs/notes/P4-k3d.md`. The same charts now run on a real k3s VPS
 with Let's Encrypt TLS; that run found 4 more problems (`docs/notes/P5-vps.md`).
+
+### Replicas: why one gateway pod, and what a second one needs
+
+The gateway runs `replicas: 1`. The request path is already replica-safe: `/mcp` and chat hold no
+session (D6), dashboard sessions are signed cookies checked against `session_version` in
+Postgres, and servers, keys and audit all live in Postgres. Two things are per pod, in memory:
+- **Login limiter** (5 failures per name or IP, then a 60s lock). With N pods behind round-robin
+  an attacker gets up to 5×N tries per window. Fix: keep the counters in Postgres (or Redis).
+- **LLM fallback cool-down.** Each pod finds out on its own that the primary model is down.
+  Harmless, only a few extra failed calls.
+
+Health status, tool lists and the `[description changed]` flag are also per pod, but each pod
+rebuilds them from Postgres and its own probes within seconds, so they converge. Startup
+migrations run per version inside a transaction; if two pods race on a fresh database the loser
+fails on the version row and its retry loop finds it applied (a Postgres advisory lock would make
+that explicit). So `replicas: 2` works today with a weaker lockout; the limiter is the one change
+to make before scaling out. Postgres itself is a single StatefulSet pod (D4), the real
+single point of failure.
 
 ## Decisions log
 

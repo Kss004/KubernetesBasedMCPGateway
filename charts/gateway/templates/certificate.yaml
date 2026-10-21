@@ -1,0 +1,13 @@
+{{- /* cert-manager Certificate for the Ingress TLS Secret. Rendered only when both
+     ingress.tlsSecretName and ingress.certIssuer (a ClusterIssuer, e.g. letsencrypt-prod)
+     are set; the ClusterIssuer itself is cluster-wide and created once, outside the charts. */}}
+{{- if and .Values.ingress.tlsSecretName .Values.ingress.certIssuer }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.ingress.tlsSecretName }}
+spec:
+  secretName: {{ .Values.ingress.tlsSecretName }}
+  dnsNames: [{{ required "appHost is required" .Values.appHost | quote }}]
+  issuerRef: { kind: ClusterIssuer, name: {{ .Values.ingress.certIssuer | quote }} }
+{{- end }}

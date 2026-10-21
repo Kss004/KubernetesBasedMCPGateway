@@ -222,7 +222,7 @@ The charts are the same; only `values-prod.yaml` and a few `--set` values change
 | Ingress | ingress-nginx, `ingress.className: nginx`, buffering-off annotations | k3s Traefik: `ingress.className: traefik`, `controllerNamespace: kube-system`, `controllerPodLabels: {app.kubernetes.io/name: traefik}`; nginx annotations nulled |
 | Hosts | `app.localhost`, `shop.localhost` | real names via `--set appHost=... --set storeHost=...` (required) |
 | Store URL | `http://<storeHost>` | `storeUrl: https://shop.<domain>` (WP_HOME / WP_SITEURL, D21) |
-| TLS | none | `ingress.tlsSecretName` (cert-manager or a manual `kubernetes.io/tls` Secret); `ingress.acmeHttp01: true` lets cert-manager's HTTP-01 solver past default-deny |
+| TLS | none | `ingress.tlsSecretName`, plus `ingress.certIssuer: letsencrypt-prod` so the chart creates the cert-manager Certificate (or leave it empty and bring a `kubernetes.io/tls` Secret); `ingress.acmeHttp01: true` lets cert-manager's HTTP-01 solver past default-deny |
 | Storage | kind `standard` | `storage.className: local-path` (k3s default) |
 | Images | local tags, `kind load` | `ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag>`; `imagePullSecrets: [{name: ghcr-pull}]` if private |
 | Cookie | no `Secure` (http) | `session.cookieSecure: true` (https only) |
@@ -250,9 +250,10 @@ The k3s run found and fixed 6 production bugs, 4 of which kind had hidden:
 **VPS: run 2026-10-21** on a Contabo VPS (k3s v1.36.5, Traefik 3.7.13, cert-manager v1.21.2,
 Let's Encrypt over HTTP-01, `sslip.io` hosts). Full commands and evidence: `docs/notes/P5-vps.md`.
 - Same charts and `values-prod.yaml`, plus `--set appHost/storeHost/storeUrl=https://...` and
-  `--set ingress.tlsSecretName=app-tls|shop-tls` (cert-manager Certificates in each namespace).
+  `--set ingress.tlsSecretName=app-tls|shop-tls`; the charts create the cert-manager Certificates
+  (`ingress.certIssuer: letsencrypt-prod` in `values-prod.yaml`).
 - Images built on the box and imported with `k3s ctr images import` (no registry).
-- smoke 13/13 and e2e 5/5 over https, `test-netpol.sh` ENFORCED, all pods restarts 0.
+- smoke 14/14 and e2e 5/5 over https, `test-netpol.sh` ENFORCED, all pods restarts 0.
 - The run found 4 problems, all fixed:
   - woo-mcp's OAuth signature failed over https (woo-mcp 0.1.6 sends `X-Forwarded-Proto: https`);
   - default-deny would block cert-manager's HTTP-01 solver at renewal
@@ -310,4 +311,5 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 
 Not attempted: multi-store provisioning, OAuth on the gateway, many-tools search, hosted MCP
 servers, and multi-replica scaling. The gateway is stateless per request (D6); the limiter and
-fallback cool-down are per pod.
+fallback cool-down are per pod (what a second replica needs: `docs/design-tradeoffs.md`,
+"Replicas").

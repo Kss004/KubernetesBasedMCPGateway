@@ -12,6 +12,8 @@ ingress:
   # here, or leave empty when TLS terminates in front of the cluster.
   # Not exercised on k3d (no public domain).
   tlsSecretName: ""
+  # The chart creates the Certificate for tlsSecretName from this ClusterIssuer.
+  certIssuer: letsencrypt-prod
   # cert-manager HTTP-01 solver pods need Traefik to reach them (issue and renewal).
   acmeHttp01: true
   # http -> https (Traefik Middleware); only rendered when tlsSecretName is set.
