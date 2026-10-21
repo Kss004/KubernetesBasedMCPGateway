@@ -47,7 +47,9 @@ export default function Team({ me, setStatus }) {
         </div>
       )}
 
-      <h2>My API keys</h2>
+      <h2>
+        My API <em>keys</em>
+      </h2>
       <KeyTable keys={myKeys} onRevoke={(k) => run(() => api(`/api/me/keys/${k.id}/revoke`, { method: 'POST', body: {} }))()} />
       <button className="primary" onClick={createMine}>
         Generate my key
@@ -73,7 +75,9 @@ export default function Team({ me, setStatus }) {
           </table>
           <AddUser onAdd={run((body) => api('/api/users', { method: 'POST', body }))} />
 
-          <h2>All keys</h2>
+          <h2>
+            All <em>keys</em>
+          </h2>
           <KeyTable
             keys={allKeys}
             showUser

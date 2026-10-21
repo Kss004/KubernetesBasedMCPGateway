@@ -1,72 +1,168 @@
+/* Harbor. Visual language follows urumi.ai: warm cream canvas, ink text, deep teal
+   accent, pill buttons, frosted floating header, soft cards, mono eyebrow labels.
+   System fonts only: the CSP is default-src 'self' and no font files are vendored. */
 :root {
-  --bg: #f6f7f9;
-  --card: #fff;
-  --fg: #1d2129;
-  --muted: #646a73;
-  --line: #dde1e6;
-  --accent: #3157d5;
-  --ok: #1e7f4f;
-  --warn: #b26a00;
-  --bad: #c0392b;
+  --bg: #f3f2ed;
+  --card: #fbfaf7;
+  --card-2: #f7f6f1;
+  --fg: #121517;
+  --muted: rgba(18, 21, 23, 0.64);
+  --faint: rgba(18, 21, 23, 0.42);
+  --line: #e2dfd5;
+  --line-2: #d6d3c8;
+  --line-3: #aeaa9c;
+  --accent: #136b69;
+  --accent-ink: #eaf4f2;
+  --accent-soft: #e2eeeb;
+  --accent-deep: #0b3f3e;
+  --ok: #136b69;
+  --warn: #c2651a;
+  --bad: #b8322a;
+  --radius: 18px;
+  --shadow: 0 1px 0 rgba(18, 21, 23, 0.04), 0 12px 32px -18px rgba(18, 21, 23, 0.18);
+  --sans: 'Switzer', 'Inter', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'Cascadia Mono', Menlo, Consolas, monospace;
   color-scheme: light;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--sans);
   color: var(--fg);
   background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
-body { margin: 0; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(60rem 28rem at 18% -6rem, rgba(19, 107, 105, 0.13), transparent 70%),
+    radial-gradient(50rem 26rem at 88% -8rem, rgba(19, 107, 105, 0.09), transparent 70%),
+    var(--bg);
+}
+::selection { background: var(--accent-soft); color: var(--accent-deep); }
+
+/* Floating frosted header pill */
 header {
-  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
-  padding: 0.75rem 1.5rem; background: var(--card); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0.75rem; z-index: 10;
+  display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+  max-width: 1100px; margin: 0.75rem auto 0; padding: 0.4rem 0.45rem 0.4rem 1.1rem;
+  background: rgba(243, 242, 237, 0.62); border: 1px solid var(--line-2); border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(18, 21, 23, 0.05);
+  backdrop-filter: blur(22px) saturate(1.8); -webkit-backdrop-filter: blur(22px) saturate(1.8);
 }
-header h1 { font-size: 1.1rem; margin: 0; }
-nav { display: flex; gap: 0.25rem; flex: 1; flex-wrap: wrap; }
-nav button { border: none; background: none; padding: 0.4rem 0.8rem; border-radius: 6px; }
-nav button.active { background: #e8edfb; color: var(--accent); font-weight: 600; }
-.who { display: flex; gap: 0.5rem; align-items: center; }
-main { max-width: 1100px; margin: 0 auto; padding: 1rem 1.5rem 3rem; }
-main.center { display: grid; place-items: center; min-height: 80vh; }
-h2 { font-size: 1.15rem; margin: 1.5rem 0 0.5rem; }
-h3 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
-th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
-th { background: #fafbfc; font-weight: 600; }
+header h1 { font-size: 1.15rem; font-weight: 500; letter-spacing: -0.02em; margin: 0; }
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--fg); }
+.brand svg { width: 1.15rem; height: 1.15rem; color: var(--accent); flex: none; }
+nav { display: flex; gap: 0.15rem; flex: 1; flex-wrap: wrap; justify-content: flex-end; }
+nav button {
+  border: 1px solid transparent; background: none; padding: 0.4rem 0.85rem; border-radius: 999px;
+  color: var(--muted); font-size: 0.875rem;
+}
+nav button:hover { color: var(--fg); background: rgba(18, 21, 23, 0.04); border-color: transparent; }
+nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.who { display: flex; gap: 0.5rem; align-items: center; font-size: 0.875rem; }
+header .who button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+header .who button:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+main.center { display: grid; place-items: center; min-height: 86vh; }
+
+/* Type: tight medium headings, italic teal accent, mono eyebrows */
+h1, h2, h3 { color: var(--fg); font-weight: 500; }
+h2 { font-size: 1.75rem; letter-spacing: -0.025em; line-height: 1.15; margin: 1.75rem 0 0.6rem; }
+h3 { font-size: 1.1rem; letter-spacing: -0.015em; margin: 1.5rem 0 0.5rem; }
+h1 em, h2 em, h3 em { font-style: italic; font-weight: 400; color: var(--accent); }
+.eyebrow, th, label {
+  font-family: var(--mono); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--muted);
+}
+p { line-height: 1.55; }
+
+/* Cards and tables */
+table {
+  width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+}
+th, td { text-align: left; vertical-align: top; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--line); }
+td { font-size: 0.9rem; }
+tr:last-child td { border-bottom: none; }
+th { background: var(--card-2); }
+tbody tr:hover td { background: rgba(19, 107, 105, 0.03); }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 1.25rem 1.5rem; box-shadow: var(--shadow);
+}
+
+/* Pill buttons: secondary is translucent cream, primary is teal, danger is quiet red */
 button {
-  font: inherit; padding: 0.35rem 0.75rem; border: 1px solid var(--line); border-radius: 6px;
-  background: var(--card); cursor: pointer;
+  font: inherit; font-size: 0.875rem; font-weight: 500; padding: 0.45rem 1rem;
+  border: 1px solid var(--line-3); border-radius: 999px; color: var(--fg);
+  background: rgba(243, 242, 237, 0.5); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-button:hover { border-color: #b8bec7; }
-button:disabled { opacity: 0.5; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { color: var(--bad); }
-input, select, textarea { font: inherit; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
-label { display: inline-flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+button:hover { border-color: var(--fg); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+button.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+button.primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.danger { color: var(--bad); border-color: rgba(184, 50, 42, 0.35); }
+button.danger:hover { border-color: var(--bad); background: rgba(184, 50, 42, 0.06); }
+
+input, select, textarea {
+  font: inherit; font-size: 0.925rem; color: var(--fg); padding: 0.55rem 0.85rem;
+  border: 1px solid var(--line-2); border-radius: 12px; background: var(--card);
+}
+input::placeholder, textarea::placeholder { color: var(--faint); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+label { display: inline-flex; flex-direction: column; gap: 0.35rem; }
+label input, label select, label textarea {
+  font-family: var(--sans); text-transform: none; letter-spacing: normal; font-size: 0.925rem;
+}
 label.grow { flex: 1; min-width: 16rem; }
-.row { display: flex; gap: 0.5rem; align-items: flex-end; flex-wrap: wrap; margin: 0.5rem 0; }
+.row { display: flex; gap: 0.6rem; align-items: flex-end; flex-wrap: wrap; margin: 0.75rem 0; }
 .actions { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-.edit { padding: 0.5rem; background: #fafbfc; border: 1px dashed var(--line); border-radius: 6px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.25rem; }
-.login { display: flex; flex-direction: column; gap: 0.75rem; width: min(22rem, 90vw); }
-.login label { font-size: 0.9rem; }
+/* A flex <td> leaves the table layout and its row lines drift; keep it a cell. */
+td.actions, td.row { display: table-cell; white-space: nowrap; margin: 0; }
+td.actions > * + *, td.row > * + * { margin-left: 0.35rem; }
+.edit { padding: 0.75rem; background: var(--card-2); border: 1px dashed var(--line-3); border-radius: 14px; }
+
+/* Login */
+.login { display: flex; flex-direction: column; gap: 0.9rem; width: min(24rem, 90vw); padding: 2rem; }
+.login h1 { font-size: 2rem; letter-spacing: -0.03em; margin: 0 0 0.25rem; display: flex; align-items: center; gap: 0.6rem; }
+.login label input { width: 100%; box-sizing: border-box; }
+.login button.primary { padding: 0.65rem 1rem; margin-top: 0.25rem; }
+
 .newkey { border-color: var(--accent); margin: 1rem 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.newkey code { overflow-wrap: anywhere; font-size: 0.95rem; }
-.status { color: var(--bad); background: #fdecea; padding: 0.5rem 0.75rem; border-radius: 6px; }
-.muted { color: var(--muted); font-size: 0.85rem; font-weight: normal; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
-.changed { color: var(--bad); font-weight: 600; }
-.pill { display: inline-block; padding: 0.05rem 0.5rem; border-radius: 999px; font-size: 0.75rem; background: #eef0f3; }
-.st-Connected, .out-ok { background: #e3f4ea; color: var(--ok); }
-.st-Unreachable, .out-error { background: #fdecea; color: var(--bad); }
-.st-Disabled { background: #eef0f3; color: var(--muted); }
-.out-denied { background: #fff3e0; color: var(--warn); }
+.newkey code { overflow-wrap: anywhere; font-family: var(--mono); font-size: 0.9rem; }
+.status { color: var(--bad); background: rgba(184, 50, 42, 0.07); border: 1px solid rgba(184, 50, 42, 0.2); padding: 0.6rem 0.9rem; border-radius: 12px; }
+.muted { color: var(--muted); font-size: 0.875rem; font-weight: normal; }
+.mono { font-family: var(--mono); font-size: 0.8rem; }
+.changed { color: var(--warn); font-weight: 600; }
+
+/* Pills and status chips */
+.pill {
+  display: inline-block; padding: 0.12rem 0.6rem; border-radius: 999px; font-family: var(--mono);
+  font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+  background: rgba(243, 242, 237, 0.7); border: 1px solid var(--line-2); color: var(--muted);
+}
+.st-Connected, .out-ok { background: var(--accent-soft); border-color: rgba(19, 107, 105, 0.25); color: var(--accent); }
+.st-Unreachable, .out-error { background: rgba(184, 50, 42, 0.08); border-color: rgba(184, 50, 42, 0.25); color: var(--bad); }
+.st-Disabled { background: transparent; color: var(--faint); }
+.out-denied { background: rgba(194, 101, 26, 0.1); border-color: rgba(194, 101, 26, 0.3); color: var(--warn); }
+
+/* Chat */
 .chat-log {
   height: 55vh; overflow-y: auto; background: var(--card); border: 1px solid var(--line);
-  border-radius: 8px; padding: 0.75rem;
+  border-radius: var(--radius); padding: 1rem 1.1rem; box-shadow: var(--shadow);
 }
-.msg { margin-bottom: 1rem; }
-.msg .who { font-size: 0.75rem; color: var(--muted); font-weight: 600; margin-bottom: 0.2rem; }
-.msg-user .text { background: #e8edfb; display: inline-block; padding: 0.4rem 0.7rem; border-radius: 8px; }
-.text { white-space: pre-wrap; line-height: 1.45; }
-.tool { font-size: 0.85rem; margin: 0.2rem 0; color: var(--muted); }
+.msg { margin-bottom: 1.1rem; }
+.msg .who { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.3rem; }
+.msg-user .text {
+  background: var(--accent); color: var(--accent-ink); display: inline-block;
+  padding: 0.5rem 0.9rem; border-radius: 16px 16px 16px 4px;
+}
+.text { white-space: pre-wrap; line-height: 1.55; }
+.tool { font-size: 0.85rem; margin: 0.25rem 0; color: var(--muted); }
 .tool-error { color: var(--bad); }
-.chat-form { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-.chat-form textarea { flex: 1; resize: vertical; }
+.chat-form { display: flex; gap: 0.6rem; margin-top: 0.75rem; align-items: stretch; }
+.chat-form textarea { flex: 1; resize: vertical; border-radius: 16px; }
+.chat-form button { align-self: flex-end; padding: 0.6rem 1.3rem; }

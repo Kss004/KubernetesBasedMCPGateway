@@ -7,6 +7,19 @@ import Team from './Team.jsx';
 import Audit from './Audit.jsx';
 import Chat from './Chat.jsx';
 
+// Harbor wordmark: a line anchor in the accent colour (inline SVG, CSP-safe).
+function Brand() {
+  return (
+    <span className="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="5" r="2.2" />
+        <path d="M12 7.2V21M8 11h8M4.5 13.5a7.5 7.5 0 0 0 15 0" />
+      </svg>
+      Harbor
+    </span>
+  );
+}
+
 const TABS = [
   { id: 'servers', label: 'Servers', adminOnly: true },
   { id: 'team', label: 'Team & Keys' },
@@ -48,7 +61,9 @@ export default function App() {
   return (
     <>
       <header>
-        <h1>Urumi Gateway</h1>
+        <h1>
+          <Brand />
+        </h1>
         <nav>
           {tabs.map((t) => (
             <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
@@ -95,7 +110,12 @@ function Login({ onLogin }) {
   return (
     <main className="center">
       <form className="card login" onSubmit={submit}>
-        <h1>Urumi Gateway</h1>
+        <h1>
+          <Brand />
+        </h1>
+        <p className="muted">
+          One gateway for every <em>MCP server</em> your team uses.
+        </p>
         <label>
           Name
           <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="username" required />

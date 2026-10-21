@@ -55,7 +55,9 @@ export default function Servers({ setStatus }) {
 
   return (
     <section>
-      <h2>MCP servers</h2>
+      <h2>
+        MCP <em>servers</em>
+      </h2>
       <table>
         <thead>
           <tr>

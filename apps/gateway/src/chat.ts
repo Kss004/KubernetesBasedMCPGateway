@@ -150,7 +150,7 @@ export const stripThinking = (s: string): string =>
 
 // Honest client identity for providers that ask for it (OpenCode Go: own user agent plus a
 // stable per-conversation x-opencode-session). Other providers ignore both headers.
-export const USER_AGENT = 'urumi-gateway/0.4';
+export const USER_AGENT = 'harbor-gateway/0.4';
 // Same id on every turn of a conversation with no stored state: hash of user + first message.
 export const conversationId = (userId: string, messages: LlmMessage[]): string =>
   createHash('sha256')

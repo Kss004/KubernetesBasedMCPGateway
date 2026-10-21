@@ -95,7 +95,7 @@ export async function handleMcp(opts: {
       return ok({
         protocolVersion: typeof p.protocolVersion === 'string' ? p.protocolVersion : '2025-11-25',
         capabilities: { tools: {} },
-        serverInfo: { name: 'urumi-gateway', version: '0.2.0' },
+        serverInfo: { name: 'harbor-gateway', version: '0.2.0' },
       });
     }
     case 'notifications/initialized':

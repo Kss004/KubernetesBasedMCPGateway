@@ -78,7 +78,9 @@ export default function Chat() {
 
   return (
     <section className="chat">
-      <h2>Chat agent</h2>
+      <h2>
+        Chat <em>agent</em>
+      </h2>
       <p className="muted">Answers use the gateway tools you are allowed to call; every call is audited under your name.</p>
       <div className="chat-log" ref={logRef}>
         {msgs.length === 0 && <p className="muted">Try: “What orders came in today?”</p>}
