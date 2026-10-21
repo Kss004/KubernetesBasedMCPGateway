@@ -203,6 +203,11 @@ Closes the gaps left by 0.4.15 against urumi.ai (read from the fully rendered si
   teal edge, red on failure), three quick-start prompts, a "Working as <user> · <role>" line.
 - **Servers:** a mono "harbor · mcp" card with a live count, one row per server with status on
   the right and tools as chips.
+- **Cursor spotlight:** urumi.ai's hero glow (their `vision-v2-hero-spotlight`): a 700px teal
+  radial gradient, blurred 40px, that trails the pointer. They use Framer Motion's
+  `useSpring(stiffness 80, damping 22, mass 0.6)`; `Spotlight` in `ui.jsx` integrates the same
+  spring by hand (no animation library). Overdamped, so no bounce; off on touch and reduced
+  motion; the frame loop stops once it settles.
 - **Page heads:** "01 / SERVERS" eyebrow, large heading with an italic teal accent, short lead.
   The new-key reveal is a dark ink panel.
 

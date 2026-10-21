@@ -95,7 +95,16 @@ nav button.active { background: var(--accent-soft); color: var(--accent); font-w
 header .who button { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 header .who button:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
 
-main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+main { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+
+/* Cursor spotlight (ui.jsx Spotlight): urumi.ai's hero glow, fixed behind everything.
+   Moved only by transform; header (z 10) and main (z 1) stack above it. */
+.spotlight {
+  position: fixed; top: 0; left: 0; z-index: 0; width: 700px; height: 700px; border-radius: 50%;
+  pointer-events: none; will-change: transform; filter: blur(40px);
+  background: radial-gradient(circle at center, rgba(19, 107, 105, 0.28) 0%, rgba(19, 107, 105, 0.12) 30%, rgba(19, 107, 105, 0.04) 55%, transparent 75%);
+}
+@media (pointer: coarse), (prefers-reduced-motion: reduce) { .spotlight { display: none; } }
 main.center { display: grid; place-items: center; min-height: 86vh; }
 .page > .page-head, .page > section > * { animation: rise 0.5s var(--ease-out) both; }
 .page > section > :nth-child(2) { animation-delay: 0.06s; }
@@ -306,7 +315,7 @@ td.actions > * + *, td.row > * + * { margin-left: 0.35rem; }
 }
 
 @media (max-width: 640px) {
-  header { border-radius: 22px; position: static; margin: 0.75rem 0.75rem 0; }
+  header { border-radius: 22px; position: relative; margin: 0.75rem 0.75rem 0; }
   .msg { max-width: 100%; }
   .mcp-tools, .mcp-row > .actions, .mcp-row > .edit { margin-left: 0; }
 }
