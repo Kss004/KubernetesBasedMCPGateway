@@ -171,8 +171,7 @@ step for write tools in chat. The audit log records every call.
   - On the VPS (k3s), klipper-lb masqueraded every client to `10.42.0.1`, even with
     `externalTrafficPolicy: Local`, so the IP lock was global. Fixed by running Traefik on
     `hostPort` 80/443 with a ClusterIP Service (`docs/notes/P5-vps.md`, problem 3); the last
-    hop is now the real source address. Checked from the box itself; a check from an outside
-    client is still pending.
+    hop is now the real source address, checked with a browser on an outside PC.
   - The counters are in memory, per gateway pod (`// ponytail:` in `session.ts`).
 - **What a member can see through the store tools (E2E round 5).** Members may call
   `woo__get_order`, which returns the customer's name and billing/shipping address (an

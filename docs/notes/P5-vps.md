@@ -121,7 +121,8 @@ issuer `Let's Encrypt YR1`, `notAfter=Jan 19 10:57:52 2027 GMT` for both hosts.
    `maxSurge: 0`: on one node a new Traefik pod cannot bind the ports until the old one stops,
    so a Traefik update has a few seconds of downtime. After the fix a request from the box to its
    public IP arrives as `X-Forwarded-For: 169.58.78.14` (the real source; before: 10.42.0.1).
-   A request from an outside client is still to be checked (see below).
+   From the user's PC (browser session, 50 requests captured): every request arrived as the
+   user's own public address (`223.181.x.x`, masked here), none as 10.42.0.1.
 
 ## Verify
 
@@ -148,8 +149,18 @@ All pods Running, restarts 0 (cert-manager x3, gateway, postgres, mariadb, woo-m
 mock-mcp, everything-mcp). smoke and e2e were run again after the Traefik change: same result.
 e2e.sh needs `node` on the host; Node v24.22.0 was installed from nodejs.org (sha256 checked).
 
-## Not yet verified
+## Browser checks (user's PC, 2026-10-21)
 
-- The client IP from an outside machine (one request from the user's PC while capturing).
-- Chat SSE through Traefik in a browser, with the real LLM keys (the user types them with `read -rs`).
-- `https://shop.../wp-admin` login in a browser.
+- Logged in as A (admin) at `https://app.169-58-78-14.sslip.io`: valid Let's Encrypt
+  certificate, Secure session cookie kept across pages.
+- Chat with the real LLM keys: "list the products in the store" called `woo list_products`
+  and answered with the store's products, over https through Traefik.
+- `https://shop.169-58-78-14.sslip.io` serves the storefront (not "Coming soon");
+  `/wp-admin` login as `admin` works (WordPress 7.1.3, WooCommerce live).
+- Users A (admin) and B (member) created with the admin API (README section 3, step 3, with
+  the https URL); passwords typed by the user at a silent prompt.
+
+## Final run (after the LLM keys and users)
+
+smoke 13/13, e2e 5/5 (product 16, order 17), `test-netpol.sh` ENFORCED, all pods Running with
+0 restarts, `app-tls` and `shop-tls` Ready from `letsencrypt-prod`.
