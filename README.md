@@ -16,7 +16,7 @@ with values changes only.
 
  gateway ──Streamable HTTP, credential attached here only──► woo-mcp        (urumi-store)
                                                           ├─► mock-mcp       (urumi-upstreams)
-                                                          ├─► everything-mcp (urumi-upstreams)
+                                                          ├─► utils-mcp      (urumi-upstreams)
                                                           └─► DeepWiki       (public https, mcp.deepwiki.com)
  woo-mcp ──WooCommerce REST (OAuth 1.0a, Service DNS)──► WordPress
  gateway chat ──► LLM (DeepSeek v4.1 flash on OpenCode Go, automatic fallback to Groq)
@@ -32,12 +32,12 @@ apps/gateway         MCP aggregator and router (/mcp), admin/users/keys/audit AP
 apps/dashboard       React (Vite) dashboard: Servers, Team & Keys, Audit, Chat
 apps/woo-mcp         the WooCommerce MCP server (5 tools) over the WooCommerce REST API
 apps/mock-mcp        upstream #2: deterministic tools (convert_currency, a colliding list_products, sleep_forever, break_me)
-apps/everything-mcp  upstream #3: echo/add (our own small server, not the official server-everything)
-apps/mcp-mini        shared stateless Streamable HTTP server shell used by mock-mcp and everything-mcp
+apps/utils-mcp       upstream #3: echo/add (our own small server)
+apps/mcp-mini        shared stateless Streamable HTTP server shell used by mock-mcp and utils-mcp
 (upstream #4)        DeepWiki: a public hosted MCP server we did not write, registered by URL (no image here)
 charts/store         WordPress, MariaDB, woo-mcp, store bootstrap Job, NetworkPolicies
 charts/gateway       gateway Deployment, Postgres, Ingress, generated Secrets, NetworkPolicies
-charts/upstreams     mock-mcp and everything-mcp
+charts/upstreams     mock-mcp and utils-mcp
 charts/*/values.yaml   local (kind) defaults; values-local.yaml restates them; values-prod.yaml holds every production difference
 scripts/             smoke.sh, e2e.sh, seed.sh + seed.mjs, test-netpol.sh
 docs/                design-tradeoffs.md, threat-model.md, versions.md, woo-store-access.md, notes/

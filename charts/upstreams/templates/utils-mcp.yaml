@@ -1,28 +1,28 @@
-# everything-mcp in urumi-upstreams (T7.1): ClusterIP, no Ingress.
+# utils-mcp in urumi-upstreams (T7.1, renamed from everything-mcp): ClusterIP, no Ingress.
 # Same shape as mock-mcp: ingress default-deny, only urumi-gateway reaches it.
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Release.Name }}-everything-mcp
+  name: {{ .Release.Name }}-utils-mcp
 spec:
   ports:
     - port: 3000
   selector:
-    app: everything-mcp
+    app: utils-mcp
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-everything-mcp
+  name: {{ .Release.Name }}-utils-mcp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: everything-mcp
+      app: utils-mcp
   template:
     metadata:
       labels:
-        app: everything-mcp
+        app: utils-mcp
     spec:
       automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
@@ -33,8 +33,8 @@ spec:
         runAsNonRoot: true
         seccompProfile: { type: RuntimeDefault }
       containers:
-        - name: everything-mcp
-          image: "{{ .Values.everythingMcp.image }}:{{ .Values.everythingMcp.tag }}"
+        - name: utils-mcp
+          image: "{{ .Values.utilsMcp.image }}:{{ .Values.utilsMcp.tag }}"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -54,10 +54,10 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: everything-mcp-ingress
+  name: utils-mcp-ingress
 spec:
   podSelector:
-    matchLabels: { app: everything-mcp }
+    matchLabels: { app: utils-mcp }
   policyTypes: [Ingress]
   ingress:
     - from:

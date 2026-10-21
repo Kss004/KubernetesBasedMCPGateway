@@ -60,7 +60,7 @@ describe('UpstreamPool.refreshNow', () => {
 
 describe('UpstreamPool outage detection', () => {
   it('marks Unreachable on the 2nd consecutive failed probe, with no skipped tick', async () => {
-    const row = { id: 's1', slug: 'everything', url: 'http://x/mcp', auth_type: 'none', header_name: null, enabled: true };
+    const row = { id: 's1', slug: 'utils', url: 'http://x/mcp', auth_type: 'none', header_name: null, enabled: true };
     let up = true;
     const pg = { query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }) };
     const pool = new UpstreamPool(pg as never, Buffer.alloc(32));

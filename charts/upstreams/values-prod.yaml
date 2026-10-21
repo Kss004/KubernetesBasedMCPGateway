@@ -1,7 +1,7 @@
 # Prod overrides for k3s. Images built with buildx (amd64+arm64) for GHCR, not pushed yet.
 mockMcp:
   image: ghcr.io/kss004/kubernetesbasedmcpgateway/mock-mcp
-everythingMcp:
-  image: ghcr.io/kss004/kubernetesbasedmcpgateway/everything-mcp
+utilsMcp:
+  image: ghcr.io/kss004/kubernetesbasedmcpgateway/utils-mcp
 
 imagePullSecrets: [] # [{ name: ghcr-pull }] for private GHCR packages

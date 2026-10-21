@@ -1,8 +1,6 @@
-// everything-mcp: third upstream (T7.1), deterministic and offline (D8).
+// utils-mcp: third upstream (T7.1, first named everything-mcp), deterministic and offline (D8).
 // Reuses mcp-mini stateless shell like mock-mcp. No auth, no network.
 // Tools: echo (round-trip), add (tiny deterministic op).
-// Not the official @modelcontextprotocol/server-everything, despite the slug. The pool
-// retries once on a 404 (lost session), so stateful servers like the official one work too.
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { serve } from 'mcp-mini';
@@ -22,4 +20,4 @@ function register(server: McpServer): void {
   );
 }
 
-serve({ name: 'everything-mcp', version: '0.1.0', port: Number(process.env.PORT ?? 3000), register });
+serve({ name: 'utils-mcp', version: '0.1.0', port: Number(process.env.PORT ?? 3000), register });

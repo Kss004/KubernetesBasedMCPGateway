@@ -6,7 +6,7 @@ live in the code or charts. Evidence is in `docs/notes/` (E2E rounds 1-8, P4-k3d
 ## Trust boundaries
 
 ```
-browser / MCP client --(Ingress, public)--> gateway --(ClusterIP, gateway only)--> woo-mcp, mock, everything
+browser / MCP client --(Ingress, public)--> gateway --(ClusterIP, gateway only)--> woo-mcp, mock, utils
                                                |                                       |
                                                +--> Postgres (gateway only)            +--> WordPress --> MariaDB
                                                +--> LLM provider (egress)                   (store only)
@@ -15,7 +15,7 @@ browser / MCP client --(Ingress, public)--> gateway --(ClusterIP, gateway only)-
 - Public: the storefront and the gateway, both through Ingress.
 - Internal only: every MCP server and both databases. They are ClusterIP Services with no
   Ingress, behind default-deny ingress NetworkPolicies:
-  - woo-mcp, mock and everything admit only pods in the `urumi-gateway` namespace;
+  - woo-mcp, mock and utils admit only pods in the `urumi-gateway` namespace;
   - WordPress admits only the ingress controller, woo-mcp and the bootstrap Job;
   - MariaDB admits only WordPress and the bootstrap Job;
   - the gateway admits only the ingress controller, and Postgres only the gateway.
@@ -145,7 +145,7 @@ step for write tools in chat. The audit log records every call.
 - **Audit without payload.** Every call and denial is logged, including revoked keys, attributed
   to the known user. Arguments and results are never stored (D22).
 - **Workloads:**
-  - `runAsNonRoot` where the image allows: gateway, woo-mcp, mock, everything. The stock
+  - `runAsNonRoot` where the image allows: gateway, woo-mcp, mock, utils. The stock
     WordPress, MariaDB and Postgres images start as root.
   - `automountServiceAccountToken: false` everywhere except the bootstrap Job, which uses a
     least-privilege Role to write the REST key Secret. The bootstrap Job runs as root

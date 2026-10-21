@@ -53,7 +53,7 @@ Cash on delivery and a US test address. Expect "Order received". Note the number
 
 ## 2. Admin sees the gateway (A)
 Log in as A, which opens the **Servers** tab. Show:
-- `woo`, `mock`, `everything` and `deepwiki` all **Connected**, 14 tools in total. `deepwiki` is a
+- `woo`, `mock`, `utils` and `deepwiki` all **Connected**, 14 tools in total. `deepwiki` is a
   public hosted MCP server we did not write, added by URL;
 - auth shows only "secret set" (no secret values).
 
@@ -92,7 +92,7 @@ In the Inspector tab that opens, connect with:
 - header `Authorization: Bearer <B key>`
 
 Then:
-- **List tools**: 10 tools, prefixed `woo__`, `mock__`, `everything__`, `deepwiki__`. There is **no**
+- **List tools**: 10 tools, prefixed `woo__`, `mock__`, `utils__`, `deepwiki__`. There is **no**
   `woo__create_product`, `woo__update_order_status`, `mock__sleep_forever` or `mock__break_me`
   (member role).
 - Call `woo__list_orders` with `after` = `<today>T00:00:00` and `before` = `<today>T23:59:59`.
@@ -142,18 +142,18 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://app.169-58-78-14.sslip.
 First show why deleting the pod is not enough: the Deployment recreates it within seconds, so
 the dashboard may never show Unreachable (D24).
 ```bash
-kubectl -n urumi-upstreams delete pod -l app=everything-mcp      # comes back almost at once
+kubectl -n urumi-upstreams delete pod -l app=utils-mcp      # comes back almost at once
 ```
 Then take it down for real:
 ```bash
-kubectl -n urumi-upstreams scale deploy/upstreams-everything-mcp --replicas=0
+kubectl -n urumi-upstreams scale deploy/upstreams-utils-mcp --replicas=0
 ```
-- Within about 10s, `everything` shows **Unreachable** while `woo` and `mock` stay Connected.
+- Within about 10s, `utils` shows **Unreachable** while `woo` and `mock` stay Connected.
 - Chat `What orders came in today?` still works.
-- An `everything` tool fails fast with "server unreachable".
+- An `utils` tool fails fast with "server unreachable".
 
 ```bash
-kubectl -n urumi-upstreams scale deploy/upstreams-everything-mcp --replicas=1
+kubectl -n urumi-upstreams scale deploy/upstreams-utils-mcp --replicas=1
 ```
 Connected again within about 10-20s.
 

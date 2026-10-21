@@ -10,7 +10,7 @@ const H = { Authorization: `Bearer ${ADMIN}`, 'Content-Type': 'application/json'
 const servers = [
   { slug: 'woo', url: process.env.WOO_URL ?? '', auth_type: 'bearer', secret: TOKEN },
   { slug: 'mock', url: process.env.MOCK_URL ?? '', auth_type: 'none' },
-  { slug: 'everything', url: process.env.EVERYTHING_URL ?? '', auth_type: 'none' },
+  { slug: 'utils', url: process.env.UTILS_URL ?? '', auth_type: 'none' },
   // Optional: an empty DEEPWIKI_URL skips it; a failure (offline cluster) only warns.
   { slug: 'deepwiki', url: process.env.DEEPWIKI_URL ?? '', auth_type: 'none', optional: true },
 ];

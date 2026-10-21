@@ -15,7 +15,7 @@ This is AI-native coding with the human learning alongside, and the human must d
 - Before writing code for a task, state the **context, constraints, the decision, the rejected alternatives, and what is uncertain**.
 - Prefer one small, understood change over a large opaque one.
 - After a task, give a plain explanation of what was built and the one non-obvious reason behind it. The human adds it as one line to the task's row.
-- Do not hide complexity. If something is a shortcut, mark it with a `// ponytail:` comment naming the ceiling and the upgrade path.
+- Do not hide complexity. If something is a shortcut, mark it with a `// Limit:` comment naming the ceiling and the upgrade path.
 
 ## 3. Hand-written zones (do not generate)
 

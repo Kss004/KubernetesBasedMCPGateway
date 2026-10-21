@@ -15,9 +15,9 @@ WOO_IMG ?= woo-mcp
 WOO_TAG ?= 0.1.8
 MOCK_IMG ?= mock-mcp
 MOCK_TAG ?= 0.1.1
-EVERYTHING_IMG ?= everything-mcp
-EVERYTHING_TAG ?= 0.1.1
-IMAGES = $(GATEWAY_IMG):$(GATEWAY_TAG) $(WOO_IMG):$(WOO_TAG) $(MOCK_IMG):$(MOCK_TAG) $(EVERYTHING_IMG):$(EVERYTHING_TAG)
+UTILS_IMG ?= utils-mcp
+UTILS_TAG ?= 0.1.2
+IMAGES = $(GATEWAY_IMG):$(GATEWAY_TAG) $(WOO_IMG):$(WOO_TAG) $(MOCK_IMG):$(MOCK_TAG) $(UTILS_IMG):$(UTILS_TAG)
 
 # Prod rehearsal on k3d (values-prod.yaml: Traefik, local-path). Own kubeconfig
 # file, so kind stays the current context; ports 8081/8444 leave kind's 80/443 alone.
@@ -44,7 +44,7 @@ up: ## Create cluster, install ingress, build+load images, secrets, helm install
 	kind load docker-image $(GATEWAY_IMG):$(GATEWAY_TAG) --name $(CLUSTER)
 	kind load docker-image $(WOO_IMG):$(WOO_TAG) --name $(CLUSTER)
 	kind load docker-image $(MOCK_IMG):$(MOCK_TAG) --name $(CLUSTER)
-	kind load docker-image $(EVERYTHING_IMG):$(EVERYTHING_TAG) --name $(CLUSTER)
+	kind load docker-image $(UTILS_IMG):$(UTILS_TAG) --name $(CLUSTER)
 	kubectl create ns $(GW_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create ns $(STORE_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create ns $(UP_NS) --dry-run=client -o yaml | kubectl apply -f -
@@ -64,7 +64,7 @@ images: ## Build the four service images locally
 	docker build -t $(GATEWAY_IMG):$(GATEWAY_TAG) -f apps/gateway/Dockerfile .
 	docker build -t $(WOO_IMG):$(WOO_TAG) -f apps/woo-mcp/Dockerfile .
 	docker build -t $(MOCK_IMG):$(MOCK_TAG) -f apps/mock-mcp/Dockerfile .
-	docker build -t $(EVERYTHING_IMG):$(EVERYTHING_TAG) -f apps/everything-mcp/Dockerfile .
+	docker build -t $(UTILS_IMG):$(UTILS_TAG) -f apps/utils-mcp/Dockerfile .
 
 down: ## helm uninstall, keep data (PVCs/Secrets carry keep policy, D20)
 	helm uninstall $(GW_RELEASE) -n $(GW_NS) || true
@@ -78,7 +78,7 @@ secrets: ## Create the LLM key Secret (LLM_SECRET, default llm-opencode) via kub
 	@if [ -z "$(LLM_API_KEY)" ]; then echo "set LLM_API_KEY=... (never commit it)"; exit 1; fi
 	kubectl -n $(GW_NS) create secret generic $(LLM_SECRET) --from-literal=api-key="$(LLM_API_KEY)" --dry-run=client -o yaml | kubectl apply -f -
 
-seed: ## Register woo, mock, everything (+ DeepWiki if online) via admin API (woo token read with kubectl, T3.6)
+seed: ## Register woo, mock, utils (+ DeepWiki if online) via admin API (woo token read with kubectl, T3.6)
 	bash scripts/seed.sh
 
 test-netpol: ## Baseline+pair NetworkPolicy enforcement test (T1.1)

@@ -7,7 +7,7 @@ from `progrestillnow.md` (section 5); the evidence is in `docs/notes/`.
 ## Architecture choices
 
 - **Three Helm charts, three namespaces.** `store` (WordPress, MariaDB, woo-mcp, bootstrap
-  Job), `upstreams` (mock-mcp, everything-mcp) and `gateway` (gateway, Postgres). Secrets live in
+  Job), `upstreams` (mock-mcp, utils-mcp) and `gateway` (gateway, Postgres). Secrets live in
   the namespace of the workload that uses them, because Secrets do not cross namespaces (D18).
   That is why woo-mcp sits next to the store: it mounts the WooCommerce REST key, and nothing else
   ever holds it.
@@ -126,7 +126,7 @@ single point of failure.
 - **D5 `<slug>__<tool>`** — client function-name compat (Anthropic/OpenAI `[A-Za-z0-9_-]`), not Gemini (allows dots). No aliasing; 64-char cap enforced at list.
 - **D6 Stateless gateway, fresh transport per request** — any replica serves any call; gives up server-initiated `tools/list_changed` notifications.
 - **D7 In-process chat agent, same aggregator** — one routing + audit path; no HTTP hop to ourselves.
-- **D8 mock + everything as upstreams #2/#3** — deterministic/offline; both are our own small servers on `mcp-mini` (`everything` is not the official server-everything). **Upstream #4 is DeepWiki** (`https://mcp.deepwiki.com/mcp`), a public hosted MCP server we did not write: it proves the gateway works with a third-party server over the internet, through the SSRF guard. Tradeoff: it depends on an outside service; if it is down it shows Unreachable and the others keep working.
+- **D8 mock + utils as upstreams #2/#3** — deterministic/offline; both are our own small servers on `mcp-mini` (`utils` was first named `everything`, renamed so it is not mistaken for the official server-everything). **Upstream #4 is DeepWiki** (`https://mcp.deepwiki.com/mcp`), a public hosted MCP server we did not write: it proves the gateway works with a third-party server over the internet, through the SSRF guard. Tradeoff: it depends on an outside service; if it is down it shows Unreachable and the others keep working.
 - **D10 OpenAI-compatible chat endpoint, plain fetch, no SDK; automatic provider fallback** — one tool-call format and one loop for every provider; switching a provider is 3 values. History: Gemini primary (Oct 17, tool-call shape verified live, `thought_signature` echoed for Gemini 3), Groq after Gemini chat completions hung (Oct 19), then DeepSeek v4.1 flash on OpenCode Go (Oct 20) because Groq's free tier refused about half the demo prompts. Groq is now an automatic fallback (`makeLlmCaller`: on a provider error the request moves to the fallback and the primary rests 60s). OpenCode Go is aimed at coding agents and monitors traffic; the gateway identifies itself honestly (own `User-Agent`, per-conversation `x-opencode-session`), and the user accepted that risk for a short demo. Verified: tool calls, a two-turn loop, and failover against both live providers.
 - **D11 All secrets generated (`randAlphaNum` + `lookup`, kept)** — no hardcoded secrets; `lookup` is empty under `helm template`, so test with real installs.
 - **D16 Images: local build + `kind load`; GHCR multi-arch for prod** — kind nodes can't see host images; mini is arm64, VPSes amd64.

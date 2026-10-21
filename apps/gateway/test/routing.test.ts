@@ -48,7 +48,7 @@ describe('grantsAllow (member deny list)', () => {
     for (const t of [...denied, 'other__break_me']) assert.equal(grantsAllow('member', t), false, t);
   });
   it('members keep the read tools', () => {
-    for (const t of ['woo__list_orders', 'woo__get_order', 'woo__list_products', 'mock__convert_currency', 'everything__add'])
+    for (const t of ['woo__list_orders', 'woo__get_order', 'woo__list_products', 'mock__convert_currency', 'utils__add'])
       assert.equal(grantsAllow('member', t), true, t);
   });
 });

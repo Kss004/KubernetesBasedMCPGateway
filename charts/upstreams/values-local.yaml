@@ -2,6 +2,6 @@
 mockMcp:
   image: mock-mcp
   tag: "0.1.1"
-everythingMcp:
-  image: everything-mcp
-  tag: "0.1.1"
+utilsMcp:
+  image: utils-mcp
+  tag: "0.1.2"

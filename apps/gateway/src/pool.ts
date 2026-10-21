@@ -3,7 +3,7 @@
 // builds a short-lived Client + transport. The background loop only tracks
 // Connected / Unreachable / Disabled (probe every 5s, 2s timeout, Unreachable
 // after 2 consecutive failures; backing off 5/10/15s while down) so listing
-// never waits on a dead upstream. Stateful upstreams (everything) can drop
+// never waits on a dead upstream. Stateful upstreams can drop
 // sessions with 404: callUpstream re-connects once and retries once.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';

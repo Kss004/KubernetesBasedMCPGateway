@@ -2,16 +2,16 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json* tsconfig.base.json ./
 COPY apps/mcp-mini/ apps/mcp-mini/
-COPY apps/everything-mcp/ apps/everything-mcp/
+COPY apps/utils-mcp/ apps/utils-mcp/
 RUN npm install --no-audit --no-fund
-RUN npm run build --workspace apps/mcp-mini && npm run build --workspace apps/everything-mcp
+RUN npm run build --workspace apps/mcp-mini && npm run build --workspace apps/utils-mcp
 
 FROM node:24-alpine
 WORKDIR /srv
 ENV NODE_ENV=production
-COPY --from=build /app/apps/everything-mcp/dist ./dist
+COPY --from=build /app/apps/utils-mcp/dist ./dist
 COPY --from=build /app/apps/mcp-mini/dist /mcp-mini/dist
-COPY --from=build /app/apps/everything-mcp/package.json ./package.json
+COPY --from=build /app/apps/utils-mcp/package.json ./package.json
 COPY --from=build /app/apps/mcp-mini/package.json /mcp-mini/package.json
 RUN npm install --omit=dev --no-audit --no-fund
 # /mcp-mini is a separate package dir (file: dep), so it needs its own

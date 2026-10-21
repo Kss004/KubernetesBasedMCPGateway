@@ -298,3 +298,15 @@ includes DeepWiki, so a DeepWiki outage fails that one check), e2e 5/5.
   charts.
 - `apps/gateway/test/crypto.test.ts`: round trip, layout, fresh IV, wrong key, tampered IV /
   ciphertext / tag, truncated blob, wrong key size. Unit tests 84.
+
+## Review fixes, round 5: `everything` renamed to `utils` (2026-10-21, utils-mcp 0.1.2)
+
+The third in-cluster upstream was called `everything`, the name of the official reference server,
+which it is not. Renamed throughout: `apps/utils-mcp`, image `utils-mcp:0.1.2`, Deployment and
+Service `upstreams-utils-mcp`, NetworkPolicy `utils-mcp-ingress`, server slug `utils`, tools
+`utils__echo` / `utils__add`. Live: `helm upgrade upstreams` replaced the old objects, `make seed`
+registered `utils`, and the old `everything` row was deleted through the admin API (older audit rows
+keep the old slug as text). Checked: 4 servers Connected, 14 tools; a member key called
+`utils__add(2,3)` and got 5; scaling `upstreams-utils-mcp` to 0 showed `utils` Unreachable while the
+others stayed Connected, and it recovered at 1. smoke 14/14, e2e 5/5. Dated notes above and in
+`P4-k3d.md` / `E2E-*` keep the old name.
