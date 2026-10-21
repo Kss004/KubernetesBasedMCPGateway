@@ -1,4 +1,4 @@
-# Demo recording runbook on the VPS (DoD walkthrough)
+# Demo recording runbook on the VPS (DoD walkthrough): Harbor
 
 The same script as `DEMO-RUNBOOK.md` (kind), adapted for the live VPS deploy
 (`docs/notes/P5-vps.md`):
@@ -29,7 +29,7 @@ the VPS runs the same gateway build.
      orders, all from 2026-10-21. "Orders today" in step 4 counts them if you record on that
      date. Either say so on camera, or move the `E2E Mug` products and orders to the trash in
      wp-admin first.
-   - On your PC, remove any old `urumi` entry from `~/.mcp-inspector/mcp.json` and from
+   - On your PC, remove any old `urumi` or `harbor` entry from `~/.mcp-inspector/mcp.json` and from
      `claude mcp list`.
 3. Chat model: DeepSeek v4.1 flash (OpenCode Go), with automatic Groq fallback. If chat says "the
    model is busy", wait about 2 minutes.
@@ -108,14 +108,14 @@ MCP_INSPECTOR_SECRET_STORE=memory $I "Authorization: Bearer $K" --method tools/c
 ### 5b. Claude Code (PC terminal)
 In an empty folder:
 ```bash
-claude mcp add --transport http urumi https://app.169-58-78-14.sslip.io/mcp --header "Authorization: Bearer <B key>"
-claude mcp list            # urumi: ... (HTTP) - Connected
+claude mcp add --transport http harbor https://app.169-58-78-14.sslip.io/mcp --header "Authorization: Bearer <B key>"
+claude mcp list            # harbor: ... (HTTP) - Connected
 claude                     # then ask:
 ```
-- `Using the urumi MCP tools: what orders came in today (UTC)? Give the count and total.`
-- `Using the urumi MCP tools: get today's order total, then convert it from USD to EUR.`
+- `Using the harbor MCP tools: what orders came in today (UTC)? Give the count and total.`
+- `Using the harbor MCP tools: get today's order total, then convert it from USD to EUR.`
 
-Approve the urumi tool calls when Claude Code asks.
+Approve the harbor tool calls when Claude Code asks.
 
 ## 6. Permissions are enforced server-side (B)
 - B **Chat**: `Create a product called Hack Mug priced 1.00`. Expect a one-sentence refusal and
@@ -177,6 +177,6 @@ Connected again within about 10-20s.
   (a phone on mobile data, say). On kind every browser shared one IP. Do it last anyway.
 
 ## After recording
-- PC: `claude mcp remove urumi`
+- PC: `claude mcp remove harbor`
 - A: revoke B's recording key
 - VPS shell and PC: `unset T K`

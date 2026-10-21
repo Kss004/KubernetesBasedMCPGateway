@@ -96,15 +96,15 @@ MCP_INSPECTOR_SECRET_STORE=memory $I "Authorization: Bearer $K" --method tools/c
 ### 5b. Claude Code
 In an empty folder:
 ```bash
-claude mcp add --transport http urumi http://app.localhost/mcp --header "Authorization: Bearer <B key>"
-claude mcp list            # urumi: ... (HTTP) - Connected
+claude mcp add --transport http harbor http://app.localhost/mcp --header "Authorization: Bearer <B key>"
+claude mcp list            # harbor: ... (HTTP) - Connected
 claude                     # then ask:
 ```
-- `Using the urumi MCP tools: what orders came in today (UTC)? Give the count and total.`
-- `Using the urumi MCP tools: get today's order total, then convert it from USD to EUR.`
+- `Using the harbor MCP tools: what orders came in today (UTC)? Give the count and total.`
+- `Using the harbor MCP tools: get today's order total, then convert it from USD to EUR.`
 
-Approve the urumi tool calls when Claude Code asks. Remove the server afterwards with
-`claude mcp remove urumi`.
+Approve the harbor tool calls when Claude Code asks. Remove the server afterwards with
+`claude mcp remove harbor`.
 
 ## 6. Permissions are enforced server-side (B)
 - B **Chat**: `Create a product called Hack Mug priced 1.00`. Expect a one-sentence refusal and
@@ -158,6 +158,6 @@ Connected again within about 10-20s.
   blocks all logins for 60s.
 
 ## After recording
-- `claude mcp remove urumi`
+- `claude mcp remove harbor`
 - revoke B's recording key
 - `unset T K`

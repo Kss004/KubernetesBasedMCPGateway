@@ -1,6 +1,6 @@
 apiVersion: v2
 name: store
-description: WooCommerce store (WordPress + MariaDB) for the Urumi MCP gateway
+description: WooCommerce store (WordPress + MariaDB) for the Harbor MCP gateway
 type: application
 version: 0.1.0
 appVersion: "7.1.3"

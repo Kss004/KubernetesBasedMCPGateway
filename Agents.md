@@ -1,4 +1,4 @@
-# AGENTS.md — Urumi MCP Gateway on Kubernetes
+# AGENTS.md — Harbor (MCP gateway on Kubernetes, Urumi take-home)
 
 Rules for every coding agent working in this repo. Keep this file short. The plan, decisions and status live in `progrestillnow.md`; do not copy them here.
 

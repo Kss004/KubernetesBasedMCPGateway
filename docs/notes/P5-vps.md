@@ -175,3 +175,14 @@ e2e.sh needs `node` on the host; Node v24.22.0 was installed from nodejs.org (sh
 
 smoke 13/13, e2e 5/5 (product 16, order 17), `test-netpol.sh` ENFORCED, all pods Running with
 0 restarts, `app-tls` and `shop-tls` Ready from `letsencrypt-prod`.
+
+## Harbor rename and restyle (gateway 0.4.15, 2026-10-21)
+
+- Visible product name is now **Harbor**: dashboard wordmark and title, MCP `serverInfo.name`
+  `harbor-gateway`, `WWW-Authenticate: Bearer realm="harbor"`, LLM `User-Agent: harbor-gateway/0.4`.
+  Namespaces (`urumi-*`) and the kind cluster name are unchanged, so no reinstall was needed.
+- Dashboard restyled after urumi.ai (tokens read from the live site in Chrome): cream canvas
+  `#f3f2ed`, ink `#121517`, teal accent `#136b69`, frosted pill header, pill buttons, mono
+  uppercase labels, italic teal heading accents. System fonts only (CSP `default-src 'self'`).
+- Deployed with `helm upgrade gateway ... --rollback-on-failure`; smoke 13/13, all pods restarts 0;
+  Servers, Team & Keys, Audit and Chat checked in Chrome.

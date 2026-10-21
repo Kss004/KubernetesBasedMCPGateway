@@ -1,6 +1,9 @@
-# KubernetesBasedMCPGateway: WooCommerce hosting with a team MCP gateway on Kubernetes
+# Harbor: a team MCP gateway on Kubernetes, with WooCommerce hosting
 
-One WooCommerce store, a WooCommerce MCP server written for it, and a gateway with a React
+Repo: `KubernetesBasedMCPGateway`. Built for the Urumi AI FDE internship take-home (Round 1).
+Live: https://app.169-58-78-14.sslip.io (dashboard) and https://shop.169-58-78-14.sslip.io (store).
+
+One WooCommerce store, a WooCommerce MCP server written for it, and Harbor: a gateway with a React
 dashboard. An admin registers MCP servers once; every team member then uses all of them through
 one MCP endpoint (`/mcp`) and through a chat agent in the dashboard. The upstream credentials
 never leave the gateway. The same three Helm charts run on kind (local) and on k3s (production),
@@ -195,15 +198,15 @@ npx -y @modelcontextprotocol/inspector@2.11.0 --cli http://app.localhost/mcp --t
 
 **Claude Code** (tested with 2.1.304):
 ```bash
-claude mcp add --transport http urumi http://app.localhost/mcp --header "Authorization: Bearer <key>"
-claude mcp list        # urumi: http://app.localhost/mcp (HTTP) - Connected
+claude mcp add --transport http harbor http://app.localhost/mcp --header "Authorization: Bearer <key>"
+claude mcp list        # harbor: http://app.localhost/mcp (HTTP) - Connected
 ```
-Then ask, for example, "Using the urumi tools, what orders came in today?".
+Then ask, for example, "Using the harbor tools, what orders came in today?".
 
 **Cursor** and other clients: add an HTTP MCP server with the same URL and the same static
 `Authorization` header. Not tested here.
 
-A missing or bad key gets `401` with `WWW-Authenticate: Bearer realm="urumi"`. A revoked key gets
+A missing or bad key gets `401` with `WWW-Authenticate: Bearer realm="harbor"`. A revoked key gets
 `401` and an audit row `revoked_key`.
 
 ## 7. Production-like deployment (k3s)

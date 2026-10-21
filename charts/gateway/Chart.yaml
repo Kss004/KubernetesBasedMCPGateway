@@ -1,5 +1,5 @@
 apiVersion: v2
 name: gateway
-description: Urumi MCP gateway + dashboard API + postgres (urumi-gateway)
+description: Harbor MCP gateway + dashboard API + postgres (namespace urumi-gateway)
 type: application
 version: 0.1.0
