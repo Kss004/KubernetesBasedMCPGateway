@@ -6,6 +6,7 @@ import Servers from './Servers.jsx';
 import Team from './Team.jsx';
 import Audit from './Audit.jsx';
 import Chat from './Chat.jsx';
+import Orders from './Orders.jsx';
 import { PageHead } from './ui.jsx';
 
 // Harbor wordmark: a line anchor in the accent colour (inline SVG, CSP-safe).
@@ -23,6 +24,7 @@ function Brand() {
 
 const TABS = [
   { id: 'servers', label: 'Servers', adminOnly: true },
+  { id: 'orders', label: 'Orders' },
   { id: 'team', label: 'Team & Keys' },
   { id: 'audit', label: 'Audit' },
   { id: 'chat', label: 'Chat' },
@@ -34,6 +36,11 @@ const PAGES = {
     title: 'Every MCP server,',
     accent: 'one gateway.',
     lead: () => 'Upstreams Harbor aggregates. Health is probed every 5 seconds and tools are exposed as slug__tool.',
+  },
+  orders: {
+    title: 'Every order,',
+    accent: 'page by page.',
+    lead: () => 'Store orders through the woo server, with totals in the store currency. Each page load is one audited woo__list_orders call.',
   },
   team: {
     title: 'Your team and',
@@ -118,6 +125,7 @@ export default function App() {
           <div className="page" key={tab}>
             {head(tab)}
             {tab === 'servers' && <Servers setStatus={setStatus} />}
+            {tab === 'orders' && <Orders setStatus={setStatus} />}
             {tab === 'team' && <Team me={me} setStatus={setStatus} />}
             {tab === 'audit' && <Audit me={me} setStatus={setStatus} />}
           </div>

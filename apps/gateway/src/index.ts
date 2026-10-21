@@ -12,6 +12,7 @@ import { listServers, createServer, patchServer, deleteServer } from './servers.
 import { Aggregator } from './aggregator.js';
 import { handleMcp } from './router.js';
 import { handleChat } from './chat.js';
+import { listOrders } from './orders.js';
 import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 import { listAudit } from './audit.js';
@@ -246,6 +247,17 @@ const server = http.createServer(async (req, res) => {
       // Dashboard servers page: cached tool names + description-change flags.
       if (!(await requireAdmin(req, res))) return;
       send(res, 200, { tools: aggregator.listAllTools() });
+      return;
+    }
+    if ((req.url ?? '').split('?')[0] === '/api/orders' && req.method === 'GET') {
+      // Dashboard Orders page: the session user's woo__list_orders, audited like chat.
+      const u = await sessionUser(req);
+      if (!u) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const r = await listOrders({ pg: pool, aggregator, upstreams, user: u, search: new URL(req.url ?? '/', 'http://x').searchParams });
+      send(res, r.status, r.body);
       return;
     }
     if ((req.url ?? '').split('?')[0] === '/api/chat' && req.method === 'POST') {
