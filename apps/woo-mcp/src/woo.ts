@@ -4,6 +4,9 @@
 // traffic never leaves the cluster. Base URL for fetch is the WordPress
 // Service DNS; the signature base uses the public home URL (what the server
 // reconstructs via get_home_url); Host header satisfies WP's Host check.
+// WC picks the signing scheme from is_ssl() (class-wc-rest-authentication.php:581),
+// so with an https home URL we send X-Forwarded-Proto: https, which the
+// official WordPress image's wp-config.php maps to HTTPS=on.
 // node:http instead of fetch: fetch forbids setting the Host header.
 import http from 'node:http';
 import { createHmac, randomBytes } from 'node:crypto';
@@ -61,7 +64,8 @@ export function wooRequest<T>(
 ): Promise<T> {
   const signedPath = signRequest(method, path, query, cfg.consumerKey, cfg.consumerSecret);
   const url = new URL(signedPath, cfg.serviceBase);
-  const host = new URL(cfg.homeBase).host;
+  const home = new URL(cfg.homeBase);
+  const host = home.host;
   const payload = body === undefined ? undefined : JSON.stringify(body);
   return new Promise<T>((resolve, reject) => {
     const req = http.request(
@@ -71,6 +75,7 @@ export function wooRequest<T>(
         headers: {
           Host: host,
           Accept: 'application/json',
+          ...(home.protocol === 'https:' ? { 'X-Forwarded-Proto': 'https' } : {}),
           ...(payload !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
       },
