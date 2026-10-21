@@ -215,7 +215,7 @@ The charts are the same; only `values-prod.yaml` and a few `--set` values change
 | Ingress | ingress-nginx, `ingress.className: nginx`, buffering-off annotations | k3s Traefik: `ingress.className: traefik`, `controllerNamespace: kube-system`, `controllerPodLabels: {app.kubernetes.io/name: traefik}`; nginx annotations nulled |
 | Hosts | `app.localhost`, `shop.localhost` | real names via `--set appHost=... --set storeHost=...` (required) |
 | Store URL | `http://<storeHost>` | `storeUrl: https://shop.<domain>` (WP_HOME / WP_SITEURL, D21) |
-| TLS | none | `ingress.tlsSecretName` (cert-manager or a manual `kubernetes.io/tls` Secret) |
+| TLS | none | `ingress.tlsSecretName` (cert-manager or a manual `kubernetes.io/tls` Secret); `ingress.acmeHttp01: true` lets cert-manager's HTTP-01 solver past default-deny |
 | Storage | kind `standard` | `storage.className: local-path` (k3s default) |
 | Images | local tags, `kind load` | `ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag>`; `imagePullSecrets: [{name: ghcr-pull}]` if private |
 | Cookie | no `Secure` (http) | `session.cookieSecure: true` (https only) |
@@ -240,23 +240,18 @@ The k3s run found and fixed 6 production bugs, 4 of which kind had hidden:
 - `make seed` registered only one server;
 - `helm install --wait` deadlocked the store chart (its bootstrap creates woo-mcp's Secret).
 
-**VPS: not executed yet** (planned once a VPS is available). Steps:
-1. Install k3s. Open ports 80 and 443. Point DNS at the VPS, or use `sslip.io` names.
-2. Push the images:
-   ```bash
-   docker buildx build --platform linux/amd64,linux/arm64 -f apps/<name>/Dockerfile -t ghcr.io/kss004/kubernetesbasedmcpgateway/<name>:<tag> --push .
-   ```
-   Then create a `ghcr-pull` Secret in each namespace if the packages are private.
-3. Optional TLS: install cert-manager with a Let's Encrypt issuer, then set
-   `ingress.tlsSecretName`.
-4. Create the namespaces and LLM Secrets (`make secrets`). Install the store
-   (`-f values-prod.yaml --set storeHost=... --set storeUrl=https://...`, without `--wait`, as
-   `make prod-up` does). Then install the upstreams, then the gateway
-   (`--set appHost=...`), then run `make seed`.
-5. Check with `PROTO=https APP_HOST=app.<domain> SHOP_HOST=shop.<domain> bash scripts/smoke.sh`
-   and the same for `scripts/e2e.sh`, then `make test-netpol`.
-6. Check that the login limiter sees real client IPs behind klipper-lb. Set
-   `externalTrafficPolicy: Local` on Traefik's Service if it doesn't (see the threat model).
+**VPS: run 2026-10-21** on a Contabo VPS (k3s v1.36.5, Traefik 3.7.13, cert-manager v1.21.2,
+Let's Encrypt over HTTP-01, `sslip.io` hosts). Full commands and evidence: `docs/notes/P5-vps.md`.
+- Same charts and `values-prod.yaml`, plus `--set appHost/storeHost/storeUrl=https://...` and
+  `--set ingress.tlsSecretName=app-tls|shop-tls` (cert-manager Certificates in each namespace).
+- Images built on the box and imported with `k3s ctr images import` (no registry).
+- smoke 13/13 and e2e 5/5 over https, `test-netpol.sh` ENFORCED, all pods restarts 0.
+- The run found 3 problems, all fixed:
+  - woo-mcp's OAuth signature failed over https (woo-mcp 0.1.6 sends `X-Forwarded-Proto: https`);
+  - default-deny would block cert-manager's HTTP-01 solver at renewal
+    (`ingress.acmeHttp01: true` adds an allow policy);
+  - klipper-lb masqueraded every client to `10.42.0.1`, so Traefik now uses `hostPort` 80/443
+    with a ClusterIP Service (a k3s `HelmChartConfig`).
 
 ## 8. Upgrade and rollback (Helm 4)
 

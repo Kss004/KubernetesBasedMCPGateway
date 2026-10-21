@@ -42,6 +42,9 @@ Decision: ingress-nginx upstream repo is **archived (read-only since Mar 2026)**
 | k3d | v5.9.0 (binary in `~/.local/bin`, sha256 checked against the release `checksums.txt`) | `gh release list -R k3d-io/k3d` → `v5.9.0 Latest 2026-06-02`; `k3d version` → `k3d version v5.9.0` |
 | k3s | v1.35.5+k3s1 (k3d v5.9.0 default) | `k3d version` → `k3s version v1.35.5-k3s1 (default)`; `kubectl get nodes` → `v1.35.5+k3s1` |
 | Traefik (k3s bundled) | 3.6.13, IngressClass `traefik`, pods `app.kubernetes.io/name=traefik` in `kube-system` | `kubectl -n kube-system get deploy traefik -o jsonpath=...image` → `rancher/mirrored-library-traefik:3.6.13`; `kubectl get ingressclass` |
+| k3s (VPS) | v1.36.5+k3s1 | `kubectl get nodes` on the VPS (P5) |
+| Traefik (VPS) | 3.7.13, chart 40.1.5 | `kubectl -n kube-system get deploy traefik -o jsonpath=...image`; `/var/lib/rancher/k3s/server/static/charts/` |
+| cert-manager | v1.21.2 | cert-manager.io Helm install docs; `helm list -n cert-manager` |
 | StorageClass | `local-path` (default) | `kubectl get storageclass` → `local-path (default) rancher.io/local-path` |
 | Stock images multi-arch | postgres:17, wordpress:7.1.3-apache, mariadb:11.8, wordpress:cli-2.12.0 all amd64 + arm64 | `docker manifest inspect <image>` architectures |
 

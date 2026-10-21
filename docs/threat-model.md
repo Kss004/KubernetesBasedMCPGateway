@@ -168,10 +168,11 @@ step for write tools in chat. The audit log records every call.
   out, one minute at a time. A successful login clears only the name key, not the IP key.
   - The IP key is the last `X-Forwarded-For` hop. On kind every local client arrives as
     `172.18.0.1`, so one lockout blocks all local logins for 1 min.
-  - Unverified for prod: on k3s with Traefik behind klipper-lb, the last hop may be a node
-    or load-balancer address (source NAT) unless the Traefik Service uses
-    `externalTrafficPolicy: Local` or Traefik is set to trust forwarded headers. Then the IP
-    lock is effectively global in prod too. Check it on the target before relying on it.
+  - On the VPS (k3s), klipper-lb masqueraded every client to `10.42.0.1`, even with
+    `externalTrafficPolicy: Local`, so the IP lock was global. Fixed by running Traefik on
+    `hostPort` 80/443 with a ClusterIP Service (`docs/notes/P5-vps.md`, problem 3); the last
+    hop is now the real source address. Checked from the box itself; a check from an outside
+    client is still pending.
   - The counters are in memory, per gateway pod (`// ponytail:` in `session.ts`).
 - **What a member can see through the store tools (E2E round 5).** Members may call
   `woo__get_order`, which returns the customer's name and billing/shipping address (an

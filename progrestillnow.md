@@ -32,7 +32,8 @@ Items marked **REVISED** changed after the first draft. Items marked **NEW** wer
 
 As of 2026-10-20 (main at the docs commit after `143a276`): the whole system is built and runs
 on kind with `make up`, and on k3s (k3d rehearsal) with `make prod-up`.
-- Gateway 0.4.14, woo-mcp 0.1.5, mock-mcp and everything-mcp 0.1.1.
+- Gateway 0.4.14, woo-mcp 0.1.6, mock-mcp and everything-mcp 0.1.1.
+- 2026-10-21: deployed on a Contabo VPS (k3s + Let's Encrypt), `docs/notes/P5-vps.md`.
 - Chat runs on DeepSeek v4.1 flash (OpenCode Go), with automatic fallback to Groq.
 - The definition-of-done flow passed 8 E2E rounds by separate tester sessions
   (`docs/notes/E2E-2026-10-19*.md`). Both external clients were dry-run as user B: MCP Inspector
