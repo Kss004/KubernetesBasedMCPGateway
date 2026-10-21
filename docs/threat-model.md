@@ -40,8 +40,9 @@ What a member can do with it:
 - convert currency and use the other upstreams.
 
 What they cannot do:
-- The write tools (`woo__create_product`, `woo__update_order_status`) are hidden from members'
-  `tools/list` and rejected if called directly (`grantsAllow` in `router.ts`, in `/mcp` and in
+- The write tools (`woo__create_product`, `woo__update_order_status`) and the mock failure-demo
+  tools (`mock__sleep_forever`, `mock__break_me`, which could stall or break a shared upstream for
+  everyone) are hidden from members' `tools/list` and rejected if called directly (`grantsAllow` in `router.ts`, in `/mcp` and in
   chat).
 - They never see the credential. It is not in any API response (a smoke check asserts this), not
   in the browser, not in logs, and not in audit rows.
@@ -50,7 +51,7 @@ Every call is audited under the member's name. Revoking their key cuts access at
 upstream credential never needs rotating. The residual risk is data the tools legitimately
 return: a member can read and copy order data. Restricting `get_order` per role is one entry in
 `MEMBER_DENIED_SUFFIXES` (`router.ts`). The deny list matches by tool-name suffix, so it covers
-`create_product` and `update_order_status` on every server, not only woo.
+those four names on every server, not only woo and mock.
 
 ### 2. Why client tokens are not passed through to upstream servers
 

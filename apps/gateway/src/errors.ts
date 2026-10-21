@@ -8,4 +8,12 @@ export const errStatus = (e: unknown): number =>
 export const errMessage = (e: unknown): string =>
   e instanceof z.ZodError
     ? `invalid input: ${e.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ')}`
-    : (e as Error).message;
+    : errStatus(e) === 500
+      ? internal(e)
+      : (e as Error).message;
+
+// Unexpected errors: the detail (e.g. SQL text) goes to the log, never to the client.
+function internal(e: unknown): string {
+  console.error('internal error:', (e as Error)?.message ?? e);
+  return 'internal error';
+}

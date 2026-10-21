@@ -79,8 +79,9 @@ In the Inspector tab that opens, connect with:
 - header `Authorization: Bearer <B key>`
 
 Check the exact 2.11 UI labels when you open it.
-- **List tools**: 9 tools, prefixed `woo__`, `mock__`, `everything__`. There is **no**
-  `woo__create_product` and **no** `woo__update_order_status` (member role).
+- **List tools**: 7 tools, prefixed `woo__`, `mock__`, `everything__`. There is **no**
+  `woo__create_product`, `woo__update_order_status`, `mock__sleep_forever` or `mock__break_me`
+  (member role).
 - Call `woo__list_orders` with `after` = `<today>T00:00:00` and `before` = `<today>T23:59:59`.
   It returns `count`, `total` and the orders.
 - Call `mock__convert_currency` (amount = that total, from USD, to EUR). Two servers, one client,

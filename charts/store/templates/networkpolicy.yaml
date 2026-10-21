@@ -54,8 +54,9 @@ spec:
             matchLabels: { app: store-bootstrap }
       ports: [{ port: 3306 }]
 ---
-# woo-mcp accepts ingress only from the urumi-gateway namespace (D18),
-# selected by its automatic kubernetes.io/metadata.name label.
+# woo-mcp accepts ingress only from the gateway pods (app: gateway) in the urumi-gateway
+# namespace (D18); namespace and pod selectors in one entry are ANDed, so Postgres there
+# cannot reach it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -69,4 +70,6 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: urumi-gateway
+          podSelector:
+            matchLabels: { app: gateway }
       ports: [{ port: 3000 }]

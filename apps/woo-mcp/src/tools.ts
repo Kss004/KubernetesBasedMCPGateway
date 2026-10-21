@@ -19,6 +19,7 @@ interface WOrder {
   total: string;
   currency?: string;
   date_created: string;
+  date_created_gmt?: string;
   payment_method_title?: string;
 }
 
@@ -34,7 +35,8 @@ const slimOrder = (o: WOrder) => ({
   status: o.status,
   total: o.total,
   currency: o.currency,
-  created: o.date_created,
+  created: o.date_created, // store-local, same clock as list_orders after/before
+  created_gmt: o.date_created_gmt, // UTC, for display in the viewer's own timezone
   payment: o.payment_method_title,
 });
 

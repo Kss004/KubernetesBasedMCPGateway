@@ -17,11 +17,17 @@ export interface AuditEntry {
 }
 
 export async function logCall(pool: Pool, e: AuditEntry): Promise<void> {
-  await pool.query(
-    `INSERT INTO audit(user_id, key_id, server_slug, tool, outcome, error_class, duration_ms)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [e.userId, e.keyId ?? null, e.serverSlug, e.tool, e.outcome, e.errorClass ?? null, e.durationMs],
-  );
+  try {
+    await pool.query(
+      `INSERT INTO audit(user_id, key_id, server_slug, tool, outcome, error_class, duration_ms)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [e.userId, e.keyId ?? null, e.serverSlug, e.tool, e.outcome, e.errorClass ?? null, e.durationMs],
+    );
+  } catch (err) {
+    // Callers swallow this so the request still succeeds; the lost row must not vanish silently.
+    console.error(`audit write failed (user=${e.userId ?? '-'} tool=${e.tool} outcome=${e.outcome}): ${(err as Error).message}`);
+    throw err;
+  }
 }
 
 /** Latest 200 rows (D13 fallback), optionally scoped to one user. */

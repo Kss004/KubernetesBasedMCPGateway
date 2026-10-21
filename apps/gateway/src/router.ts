@@ -20,9 +20,10 @@ export function capResult(payload: unknown): unknown {
   return { content: [{ type: 'text', text: s.slice(0, RESULT_CAP_BYTES - marker.length) + marker }], truncated: true };
 }
 
-// T11.1 (D23): members default-allow every tool except writes.
+// T11.1 (D23): members default-allow every tool except the deny list below.
 // Limit: fixed in-code deny list; if per-user/per-server grants are needed, move to a DB table + admin API.
-const MEMBER_DENIED_SUFFIXES = new Set(['create_product', 'update_order_status']);
+// Writes, plus the mock failure-demo tools (one member could stall or break a shared upstream).
+const MEMBER_DENIED_SUFFIXES = new Set(['create_product', 'update_order_status', 'sleep_forever', 'break_me']);
 
 /** MCP tool results report failure in-band (isError), not as a thrown error. */
 export const isToolError = (result: unknown): boolean =>

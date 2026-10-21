@@ -92,7 +92,7 @@ export default function Orders({ setStatus }) {
           {orders.map((o) => (
             <tr key={o.id}>
               <td className="mono">#{o.id}</td>
-              <td>{o.created ? new Date(`${o.created}Z`).toLocaleString() : '—'}</td>
+              <td>{o.created_gmt ? new Date(`${o.created_gmt}Z`).toLocaleString() : o.created || '—'}</td>
               <td>
                 <span className={`pill ord-${o.status}`}>{o.status}</span>
               </td>

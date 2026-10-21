@@ -62,16 +62,22 @@ export async function listOrders(opts: {
   const v = validateToolArgs(hit.tool.inputSchema, args);
   if (!v.ok) return { status: 400, body: { error: v.error } };
   const t0 = Date.now();
+  let result: unknown;
   try {
-    const result = await opts.upstreams.callTool(hit.serverId, splitName(ORDERS_TOOL)?.tool ?? ORDERS_TOOL, v.value, CALL_TIMEOUT_MS);
-    const toolErr = isToolError(result);
-    await audit(hit.tool.serverSlug, toolErr ? 'error' : 'ok', toolErr ? 'tool_error' : null, Date.now() - t0);
-    const text = (result as { content?: Array<{ type?: string; text?: string }> }).content?.find((c) => c.type === 'text')?.text;
-    if (toolErr || !text) return { status: 502, body: { error: 'the store could not list orders' } };
-    return { status: 200, body: JSON.parse(text) };
+    result = await opts.upstreams.callTool(hit.serverId, splitName(ORDERS_TOOL)?.tool ?? ORDERS_TOOL, v.value, CALL_TIMEOUT_MS);
   } catch (e) {
     const st = (e as { status?: number }).status;
     await audit(hit.tool.serverSlug, 'error', st === 502 ? 'server_unreachable' : 'upstream_error', Date.now() - t0);
     return { status: st === 503 ? 503 : 502, body: { error: st === 503 ? 'the store server is disabled' : 'the store is unreachable' } };
+  }
+  // One audit row per call: the outcome is known here, before the reply is parsed.
+  const toolErr = isToolError(result);
+  await audit(hit.tool.serverSlug, toolErr ? 'error' : 'ok', toolErr ? 'tool_error' : null, Date.now() - t0);
+  const text = (result as { content?: Array<{ type?: string; text?: string }> }).content?.find((c) => c.type === 'text')?.text;
+  if (toolErr || !text) return { status: 502, body: { error: 'the store could not list orders' } };
+  try {
+    return { status: 200, body: JSON.parse(text) };
+  } catch {
+    return { status: 502, body: { error: 'the store sent an unreadable reply' } };
   }
 }

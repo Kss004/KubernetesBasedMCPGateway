@@ -246,3 +246,24 @@ A tester using A reported three issues:
    them. The supported model is one user per person.
 
 After this round: smoke 14/14, e2e 5/5, netpol ENFORCED, 0 restarts.
+
+## Review fixes, round 1 (2026-10-21, gateway 0.4.18, woo-mcp 0.1.8)
+
+From an outside review of the repo. Each item checked live on the VPS after the upgrade:
+1. **Members could break a shared upstream.** `mock__break_me` (fails every mock tool until the pod
+   restarts) and `mock__sleep_forever` were open to members. Both are now in the member deny list.
+   A member key lists 7 tools, and `mock__break_me` gets `-32000 forbidden for role` with a
+   `denied` audit row.
+2. **Order times.** `list_orders` also returns `created_gmt`; the Orders page shows that in the
+   viewer's timezone instead of treating the store-local `created` as UTC (it only matched because
+   this store runs on UTC). `created` is unchanged, since `after`/`before` use the same clock.
+3. **Orders audit.** A reply that is not JSON wrote an `ok` row and then an `error` row; now it is
+   one row and a 502 "unreadable reply".
+4. **Lost audit writes** are logged (`audit write failed ...`) instead of disappearing; requests
+   still succeed. **500 errors** return `internal error` and log the detail. **`/mcp` without a
+   bearer key** gets 401 before the body is read.
+5. **woo-mcp NetworkPolicy** now admits only `app: gateway` pods in `urumi-gateway`. Checked:
+   Postgres -> woo-mcp:3000 is blocked, the gateway connects. `test-netpol.sh` now deletes its
+   namespace on exit.
+
+After this round: unit tests 68 + 4, smoke 14/14, e2e 5/5, netpol ENFORCED, 0 restarts.

@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { prefixName, splitName, capDescription } from '../src/aggregator.ts';
-import { capResult, RESULT_CAP_BYTES } from '../src/router.ts';
+import { capResult, grantsAllow, RESULT_CAP_BYTES } from '../src/router.ts';
 
 describe('prefixName', () => {
   it('prefixes and enforces 64 chars', () => {
@@ -36,5 +36,19 @@ describe('caps', () => {
       truncated: boolean;
     };
     assert.equal(big.truncated, true);
+  });
+});
+
+describe('grantsAllow (member deny list)', () => {
+  const denied = ['woo__create_product', 'woo__update_order_status', 'mock__sleep_forever', 'mock__break_me'];
+  it('admins may call everything', () => {
+    for (const t of [...denied, 'woo__list_orders']) assert.equal(grantsAllow('admin', t), true, t);
+  });
+  it('members are denied writes and the failure-demo tools, on any server', () => {
+    for (const t of [...denied, 'other__break_me']) assert.equal(grantsAllow('member', t), false, t);
+  });
+  it('members keep the read tools', () => {
+    for (const t of ['woo__list_orders', 'woo__get_order', 'woo__list_products', 'mock__convert_currency', 'everything__add'])
+      assert.equal(grantsAllow('member', t), true, t);
   });
 });

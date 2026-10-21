@@ -178,6 +178,12 @@ const server = http.createServer(async (req, res) => {
         send(res, 405, { error: 'method not allowed' });
         return;
       }
+      // No key at all: refuse before reading up to 1 MB of body.
+      if (!/^Bearer \S/.test(req.headers.authorization ?? '')) {
+        res.setHeader('WWW-Authenticate', 'Bearer realm="harbor"');
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
       try {
         const body = await readJson(req, 1 << 20);
         const out = await handleMcp({
@@ -233,7 +239,6 @@ const server = http.createServer(async (req, res) => {
         send(res, 405, { error: 'method not allowed' });
       } catch (e) {
         const status = errStatus(e);
-        if (status === 500) console.error('admin api', (e as Error).message);
         send(res, status, { error: errMessage(e) });
       }
       return;
@@ -318,7 +323,6 @@ const server = http.createServer(async (req, res) => {
         const status = errStatus(e);
         if ((e as { code?: string }).code === '23505') send(res, 409, { error: 'name taken' });
         else {
-          if (status === 500) console.error('users api', (e as Error).message);
           send(res, status, { error: errMessage(e) });
         }
       }
@@ -347,7 +351,6 @@ const server = http.createServer(async (req, res) => {
         send(res, 405, { error: 'method not allowed' });
       } catch (e) {
         const status = errStatus(e);
-        if (status === 500) console.error('keys api', (e as Error).message);
         send(res, status, { error: errMessage(e) });
       }
       return;

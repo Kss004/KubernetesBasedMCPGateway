@@ -14,6 +14,8 @@ CLIENT_IMG=busybox:1.36
 
 kubectl delete ns "$NS" --ignore-not-found >/dev/null
 kubectl create ns "$NS" >/dev/null
+# Remove the scratch namespace however the script ends (KEEP_NS=1 keeps it for debugging).
+[ "${KEEP_NS:-}" = 1 ] || trap 'kubectl delete ns "$NS" --ignore-not-found --wait=false >/dev/null' EXIT
 for i in $(seq 1 30); do kubectl -n "$NS" get sa default >/dev/null 2>&1 && break || sleep 2; done
 kubectl -n "$NS" create deploy target --image="$TARGET_IMG" >/dev/null
 kubectl -n "$NS" expose deploy target --port=80 >/dev/null

@@ -48,8 +48,8 @@ from `progrestillnow.md` (section 5); the evidence is in `docs/notes/`.
 **Routing** (`router.ts`, `pool.ts`), for `tools/call woo__list_orders`:
 1. Check the key: SHA-256 of the bearer key, then look up the user and role. A revoked or unknown
    key gets `401`.
-2. Check the role: members cannot see or call `woo__create_product` and
-   `woo__update_order_status` (`grantsAllow`). A denied call gets `-32000` and an audit row
+2. Check the role: members cannot see or call `woo__create_product`,
+   `woo__update_order_status`, `mock__sleep_forever` or `mock__break_me` (`grantsAllow`). A denied call gets `-32000` and an audit row
    `denied`.
 3. Resolve the full prefixed name to its server. The server must be enabled and not Unreachable.
 4. Decrypt that server's credential (AES-256-GCM, key in a Secret) and attach it as a bearer or
@@ -95,7 +95,8 @@ The same charts are used; only values change (`charts/*/values-prod.yaml`, READM
 All of this except TLS, GHCR pulls and `cookieSecure: true` (P4-k3d.md, "Not covered") was
 rehearsed on k3s (k3d v5.9.0) with `make prod-up` / `make prod-check`: from zero
 at gateway 0.4.2 (2026-10-18), and the current build (0.4.14) on 2026-10-20. The k3s run found 6
-bugs, 4 of which kind hid; see `docs/notes/P4-k3d.md`. A real VPS run is pending.
+bugs, 4 of which kind hid; see `docs/notes/P4-k3d.md`. The same charts now run on a real k3s VPS
+with Let's Encrypt TLS; that run found 4 more problems (`docs/notes/P5-vps.md`).
 
 ## Decisions log
 

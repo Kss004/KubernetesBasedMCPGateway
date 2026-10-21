@@ -180,9 +180,10 @@ Log in at http://app.localhost.
 ## 6. Connect an external MCP client
 
 Every client needs only the gateway URL `http://app.localhost/mcp` (Streamable HTTP) and a user's
-API key. Generate a key on **Team & Keys → Generate my key**; it is shown once. A member sees 9
-tools: the write tools `woo__create_product` and `woo__update_order_status` are admin-only, hidden
-from `tools/list` and rejected if called.
+API key. Generate a key on **Team & Keys → Generate my key**; it is shown once. A member sees 7
+tools: the write tools `woo__create_product` and `woo__update_order_status`, and the failure-demo
+tools `mock__sleep_forever` and `mock__break_me`, are admin-only, hidden from `tools/list` and
+rejected if called.
 
 **MCP Inspector 2.11.0** (UI):
 ```bash
@@ -295,8 +296,8 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 
 | Item | Where |
 |---|---|
-| Production-like deployment (k3s via k3d; VPS pending) | section 7, `docs/notes/P4-k3d.md`, `charts/*/values-prod.yaml` |
-| Tool permissions (members cannot see or call write tools) | `apps/gateway/src/router.ts` (`grantsAllow`), applied in `/mcp` and in chat |
+| Production-like deployment (live on a k3s VPS with Let's Encrypt TLS via cert-manager; rehearsed on k3d first) | section 7, `docs/notes/P5-vps.md`, `docs/notes/P4-k3d.md`, `charts/*/values-prod.yaml` |
+| Tool permissions (members cannot see or call write tools or the failure-demo tools) | `apps/gateway/src/router.ts` (`grantsAllow`), applied in `/mcp` and in chat |
 | Security hardening: SSRF guard on server URLs, credentials encrypted at rest (AES-256-GCM), default-deny ingress NetworkPolicies with an enforcement test, non-root containers where the image allows, no service-account tokens, least-privilege RBAC for the bootstrap Job, CSP and security headers, login rate limit, logout invalidation | `apps/gateway/src/servers.ts` (`validUrl`), `crypto.ts`, `session.ts`, the `NetworkPolicy` objects in `charts/*/templates/`, `charts/store/templates/bootstrap.yaml` (Role), `scripts/test-netpol.sh` |
 | Upgrades and rollback | section 8, `docs/notes/P4-k3d.md` |
 | Observability (partial): clear Unreachable status with fast detection (about 10s), error classes in the audit, failover and failure log lines | `apps/gateway/src/pool.ts`, `audit.ts`, `chat.ts` |

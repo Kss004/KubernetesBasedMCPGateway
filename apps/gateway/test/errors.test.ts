@@ -18,5 +18,6 @@ describe('errStatus / errMessage', () => {
     assert.equal(errStatus(e), 404);
     assert.equal(errMessage(e), 'not found');
     assert.equal(errStatus(new Error('boom')), 500);
+    assert.equal(errMessage(new Error('relation "users" does not exist')), 'internal error');
   });
 });
