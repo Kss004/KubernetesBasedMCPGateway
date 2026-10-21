@@ -221,3 +221,28 @@ as in the install sequence, then the README upgrade command:
 `helm upgrade gateway ./charts/gateway -n urumi-gateway -f charts/gateway/values-prod.yaml
 --set appHost=app.169-58-78-14.sslip.io --set ingress.tlsSecretName=app-tls --set gatewayTag=0.4.16
 --rollback-on-failure --timeout 3m`, then `make smoke` with `PROTO=https` (now 14 checks: one more for a served font).
+
+## Tester feedback round (gateway 0.4.17, woo-mcp 0.1.7, 2026-10-21)
+
+A tester using A reported three issues:
+
+1. **Currency.** `list_orders`, `list_products` and `create_product` returned bare amounts, so the
+   model guessed the currency. woo-mcp now reads the store currency once
+   (`GET /wc/v3/data/currencies/current`, cached) and every amount carries `currency` (ISO code)
+   and `symbol`.
+2. **Order pagination.** `list_orders` only had `complete: orders.length < perPage` and summed
+   just the fetched page. It now reads WooCommerce's `X-WP-Total`/`X-WP-TotalPages`, returns
+   `page`, `per_page`, `total_pages`, and its `count`/`total` cover **every** matching order
+   (walked in pages of 100, capped at 1,000; `complete` says whether the cap was hit).
+   `list_products` returns `total_products`/`total_pages` too. Checked live: page 2 of size 3
+   returned #17, #14, #12 with `count 6, total 59.94 USD`, the same as one full fetch.
+   New **Orders** tab in the dashboard (`GET /api/orders`): status and date filters, First/Prev/
+   Next/Last, page size 10-100. It calls `woo__list_orders` the same way chat does (role grants,
+   schema check, one audit row per page load), so it shows nothing a member could not already
+   get. 401 without a session.
+3. **Several people on one account.** Not changed (login logic is the hand-written T4.3 zone):
+   Logout bumps `session_version`, which by design ends **every** session of that user, so one
+   tester logging out kicks the others; the login limiter also locks the user name for all of
+   them. The supported model is one user per person.
+
+After this round: smoke 14/14, e2e 5/5, netpol ENFORCED, 0 restarts.
