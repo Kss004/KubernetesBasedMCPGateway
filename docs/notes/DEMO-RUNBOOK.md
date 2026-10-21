@@ -1,6 +1,7 @@
 # Demo recording runbook (DoD walkthrough)
 
 The script for the demo video, on kind (`http://app.localhost`, `http://shop.localhost`).
+For the live VPS (https, sslip.io hosts) use `DEMO-RUNBOOK-VPS.md`.
 Every step below was dry-run on 2026-10-20 at gateway 0.4.14:
 - MCP Inspector CLI 2.11.0 with a member key: 9 tools, `woo__list_orders` today gave
   `count 3, total 61.73`, and `mock__convert_currency` 100 USD gave 92 EUR;
