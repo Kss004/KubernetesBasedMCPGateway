@@ -11,6 +11,8 @@ ingress:
   # true when cert-manager issues tlsSecretName via ACME HTTP-01 in this namespace:
   # admits the controller to the solver pods (port 8089) past default-deny.
   acmeHttp01: false
+  # Traefik only, and only with tlsSecretName: redirect http to https (Middleware CRD).
+  httpsRedirect: false
   # Controller-specific; these keep /mcp and chat SSE streaming on ingress-nginx (T1.2).
   annotations:
     nginx.ingress.kubernetes.io/proxy-buffering: "off"

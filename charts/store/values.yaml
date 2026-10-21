@@ -15,6 +15,7 @@ ingress:
   controllerPodLabels: {}
   tlsSecretName: "" # kubernetes.io/tls Secret in this namespace; empty = no tls block
   acmeHttp01: false # true when cert-manager HTTP-01 issues tlsSecretName here (see the gateway chart)
+  httpsRedirect: false # Traefik + tlsSecretName: redirect http to https (see the gateway chart)
   annotations: {}
 
 imagePullSecrets: [] # e.g. [{ name: ghcr-pull }], created out-of-band
