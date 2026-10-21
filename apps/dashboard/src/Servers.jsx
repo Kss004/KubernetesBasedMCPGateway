@@ -53,60 +53,70 @@ export default function Servers({ setStatus }) {
     await load();
   });
 
+  const list = servers ?? [];
+  const stateOf = (s) => (s.enabled ? health[s.id] ?? 'Unreachable' : 'Disabled');
+  const live = list.filter((s) => stateOf(s) === 'Connected').length;
+  const toolCount = Object.values(tools).reduce((n, ts) => n + ts.length, 0);
+
   return (
     <section>
-      <h2>
-        MCP <em>servers</em>
-      </h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Server</th>
-            <th>Status</th>
-            <th>Tools</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(servers ?? []).map((s) => {
-            const st = s.enabled ? health[s.id] ?? 'Unreachable' : 'Disabled';
+      <div className="mcp-card">
+        <div className="mcp-head">
+          <span>
+            <span className="accent">→</span> harbor · mcp
+          </span>
+          <span className="mcp-live">
+            <span className={live ? 'dot-live' : 'dot-off'} aria-hidden="true" />
+            {live}/{list.length} live
+          </span>
+        </div>
+        <p className="mcp-label">Registered servers</p>
+        {servers === null && <p className="muted">Loading…</p>}
+        {servers?.length === 0 && <p className="muted">No servers registered.</p>}
+        <ul className="mcp-rows">
+          {list.map((s) => {
+            const st = stateOf(s);
             return (
-              <tr key={s.id}>
-                <td>
-                  <strong>{s.slug}</strong>
-                  <div className="muted mono">{s.url}</div>
-                  <div className="muted">
-                    auth: {s.auth_type}
-                    {s.header_name ? ` (${s.header_name})` : ''}
-                    {s.has_secret ? ', secret set' : ''}
+              <li key={s.id} className={`mcp-row is-${st}`}>
+                <div className="mcp-main">
+                  <span className="glyph" aria-hidden="true">
+                    {st === 'Connected' ? '◆' : '○'}
+                  </span>
+                  <div className="mcp-id">
+                    <span className="name">{s.slug}</span>
+                    <span className="url">{s.url}</span>
+                    <span className="meta">
+                      auth: {s.auth_type}
+                      {s.header_name ? ` (${s.header_name})` : ''}
+                      {s.has_secret ? ', secret set' : ''}
+                    </span>
                   </div>
-                  {editing === s.id && <EditForm s={s} onSave={(body) => patch(s.id, body)()} onCancel={() => setEditing(null)} />}
-                </td>
-                <td>
-                  <span className={`pill st-${st}`}>{st}</span>
-                </td>
-                <td>
+                  <span className={`state st-${st}`}>{st}</span>
+                </div>
+                <div className="mcp-tools">
                   {(tools[s.id] ?? []).map((t) => (
-                    <div key={t.name} className={t.changed ? 'changed mono' : 'mono'} title={t.description}>
+                    <span key={t.name} className={t.changed ? 'chip changed' : 'chip'} title={t.description}>
                       {t.name}
-                      {t.changed ? ' [description changed]' : ''}
-                    </div>
+                      {t.changed ? ' · description changed' : ''}
+                    </span>
                   ))}
-                </td>
-                <td className="actions">
+                </div>
+                <div className="actions">
                   <button onClick={() => setEditing(editing === s.id ? null : s.id)}>Edit</button>
                   <button onClick={patch(s.id, { enabled: !s.enabled })}>{s.enabled ? 'Disable' : 'Enable'}</button>
                   <button className="danger" onClick={remove(s)}>
                     Remove
                   </button>
-                </td>
-              </tr>
+                </div>
+                {editing === s.id && <EditForm s={s} onSave={(body) => patch(s.id, body)()} onCancel={() => setEditing(null)} />}
+              </li>
             );
           })}
-        </tbody>
-      </table>
-      {servers === null && <p className="muted">Loading…</p>}
-      {servers?.length === 0 && <p className="muted">No servers registered.</p>}
+        </ul>
+        <p className="mcp-foot">
+          {toolCount} tools · named slug__tool · credentials are write-only and never reach a client
+        </p>
+      </div>
 
       <h3>Add server</h3>
       <form className="row" onSubmit={add}>

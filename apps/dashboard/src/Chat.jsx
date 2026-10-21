@@ -1,6 +1,10 @@
 // Chat agent UI: POST /api/chat streams SSE events (text, tool, error, done).
 // History lives here and is re-sent each turn; the server stores nothing (D22).
 import { useEffect, useRef, useState } from 'react';
+import { Typing } from './ui.jsx';
+
+// Quick starts for the empty state (DoD prompts; members can run all three).
+const PROMPTS = ['What orders came in today?', 'List the products in the store', 'Convert 100 USD to EUR'];
 
 // "woo__list_orders" -> { server: "woo", tool: "list_orders" }
 const splitTool = (name) => {
@@ -8,7 +12,7 @@ const splitTool = (name) => {
   return i > 0 ? { server: name.slice(0, i), tool: name.slice(i + 2) } : { server: '?', tool: name };
 };
 
-export default function Chat() {
+export default function Chat({ me }) {
   const [msgs, setMsgs] = useState([]); // { role, content, tools?: [{name,status,error}] }
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -20,7 +24,10 @@ export default function Chat() {
 
   const send = async (e) => {
     e.preventDefault();
-    const text = input.trim();
+    await ask(input.trim());
+  };
+
+  const ask = async (text) => {
     if (!text || busy) return;
     setInput('');
     setBusy(true);
@@ -78,42 +85,61 @@ export default function Chat() {
 
   return (
     <section className="chat">
-      <h2>
-        Chat <em>agent</em>
-      </h2>
-      <p className="muted">Answers use the gateway tools you are allowed to call; every call is audited under your name.</p>
-      <div className="chat-log" ref={logRef}>
-        {msgs.length === 0 && <p className="muted">Try: “What orders came in today?”</p>}
-        {msgs.map((m, i) => (
-          <div key={i} className={`msg msg-${m.role}`}>
-            <div className="who">{m.role === 'user' ? 'You' : 'Agent'}</div>
-            {m.tools?.map((t, j) => {
-              const { server, tool } = splitTool(t.name);
-              return (
-                <div key={j} className={`tool tool-${t.status}`} title={t.error || ''}>
-                  <span className="pill">{server}</span> <span className="mono">{tool}</span>{' '}
-                  {t.status === 'start' ? '…' : t.status === 'done' ? '✓' : `✗ ${t.error ?? ''}`}
-                </div>
-              );
-            })}
-            {m.content ? <div className="text">{m.content}</div> : m.role === 'assistant' && busy && i === msgs.length - 1 && <div className="muted">thinking…</div>}
-          </div>
-        ))}
+      <div className="chat-panel">
+        <div className="chat-log" ref={logRef}>
+          {msgs.length === 0 && (
+            <div className="chat-empty">
+              <p className="eyebrow">Start with</p>
+              <div className="prompts">
+                {PROMPTS.map((p) => (
+                  <button key={p} type="button" onClick={() => ask(p)} disabled={busy}>
+                    {p} <span aria-hidden="true">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {msgs.map((m, i) => (
+            <div key={i} className={`msg msg-${m.role}`}>
+              {m.role === 'assistant' && <div className="who">Harbor agent</div>}
+              {m.tools?.map((t, j) => {
+                const { server, tool } = splitTool(t.name);
+                const state = t.status === 'start' ? 'running' : t.status === 'done' ? 'done' : 'failed';
+                return (
+                  <div key={j} className={`tool-card tool-${t.status}`} title={t.error || ''}>
+                    <span className="tag">{server}</span>
+                    <span className="mono">{tool}</span>
+                    <span className="state">{state}</span>
+                    {t.error && <div className="tool-err">{t.error}</div>}
+                  </div>
+                );
+              })}
+              {m.content ? (
+                <div className="text">{m.content}</div>
+              ) : (
+                m.role === 'assistant' && busy && i === msgs.length - 1 && <Typing />
+              )}
+            </div>
+          ))}
+        </div>
+        <form className="chat-form" onSubmit={send}>
+          <textarea
+            rows={2}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) send(e);
+            }}
+            placeholder="Ask about orders, products…"
+          />
+          <button type="submit" className="primary" disabled={busy || !input.trim()}>
+            Send <span aria-hidden="true">↑</span>
+          </button>
+        </form>
+        <p className="chat-foot">
+          <span className="dot-live" aria-hidden="true" /> Working as {me.name} · {me.role} · every tool call audited
+        </p>
       </div>
-      <form className="chat-form" onSubmit={send}>
-        <textarea
-          rows={2}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) send(e);
-          }}
-          placeholder="Ask about orders, products…"
-        />
-        <button type="submit" className="primary" disabled={busy || !input.trim()}>
-          Send
-        </button>
-      </form>
     </section>
   );
 }

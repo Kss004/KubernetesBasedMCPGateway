@@ -16,9 +16,6 @@ export default function Audit({ me, setStatus }) {
 
   return (
     <section>
-      <h2>
-        Audit <em>log</em> <span className="muted">(latest 200{me.role === 'admin' ? ', all users' : ', your calls'})</span>
-      </h2>
       <div className="row">
         <button onClick={guard(setStatus, load)}>Refresh</button>
         {me.role === 'admin' && (

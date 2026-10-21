@@ -6,6 +6,7 @@ import Servers from './Servers.jsx';
 import Team from './Team.jsx';
 import Audit from './Audit.jsx';
 import Chat from './Chat.jsx';
+import { PageHead } from './ui.jsx';
 
 // Harbor wordmark: a line anchor in the accent colour (inline SVG, CSP-safe).
 function Brand() {
@@ -26,6 +27,31 @@ const TABS = [
   { id: 'audit', label: 'Audit' },
   { id: 'chat', label: 'Chat' },
 ];
+
+// Page heading per tab: title + italic accent phrase + lead (lead may depend on the role).
+const PAGES = {
+  servers: {
+    title: 'Every MCP server,',
+    accent: 'one gateway.',
+    lead: () => 'Upstreams Harbor aggregates. Health is probed every 5 seconds and tools are exposed as slug__tool.',
+  },
+  team: {
+    title: 'Your team and',
+    accent: 'their keys.',
+    lead: () => 'A key is shown once, then stored only as a SHA-256 hash. Revoking it takes effect on the next call.',
+  },
+  audit: {
+    title: 'Every call,',
+    accent: 'on the record.',
+    lead: (me) =>
+      `Who called which tool, when, and how it went. Arguments and results are never stored. Latest 200${me.role === 'admin' ? ', all users' : ', your calls only'}.`,
+  },
+  chat: {
+    title: 'Talk to your',
+    accent: 'store.',
+    lead: () => 'The agent uses only the tools you are allowed to call, and every call is audited under your name.',
+  },
+};
 
 export default function App() {
   const [me, setMe] = useState(undefined); // undefined = loading, null = logged out
@@ -58,6 +84,11 @@ export default function App() {
     );
 
   const tabs = TABS.filter((t) => !t.adminOnly || me.role === 'admin');
+  const head = (id) => {
+    const p = PAGES[id];
+    const i = tabs.findIndex((t) => t.id === id);
+    return <PageHead n={i + 1} label={tabs[i].label} title={p.title} accent={p.accent} lead={p.lead(me)} />;
+  };
   return (
     <>
       <header>
@@ -82,12 +113,19 @@ export default function App() {
             {status}
           </p>
         )}
-        {tab === 'servers' && <Servers setStatus={setStatus} />}
-        {tab === 'team' && <Team me={me} setStatus={setStatus} />}
-        {tab === 'audit' && <Audit me={me} setStatus={setStatus} />}
+        {tab !== 'chat' && (
+          // key: remount on tab change so the entrance animation replays
+          <div className="page" key={tab}>
+            {head(tab)}
+            {tab === 'servers' && <Servers setStatus={setStatus} />}
+            {tab === 'team' && <Team me={me} setStatus={setStatus} />}
+            {tab === 'audit' && <Audit me={me} setStatus={setStatus} />}
+          </div>
+        )}
         {/* Chat stays mounted so history survives tab switches. */}
-        <div hidden={tab !== 'chat'}>
-          <Chat />
+        <div className="page" hidden={tab !== 'chat'}>
+          {head('chat')}
+          <Chat me={me} />
         </div>
       </main>
     </>
