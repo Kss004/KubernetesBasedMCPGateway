@@ -124,6 +124,17 @@ issuer `Let's Encrypt YR1`, `notAfter=Jan 19 10:57:52 2027 GMT` for both hosts.
    From the user's PC (browser session, 50 requests captured): every request arrived as the
    user's own public address (`223.181.x.x`, masked here), none as 10.42.0.1.
 
+4. **Plain http was served, not redirected** (found in the final browser QA). Chrome upgrades to
+   https on its own, but other clients got the dashboard over http, where the `Secure` session
+   cookie is dropped, so a login would silently fail. Fix: `ingress.httpsRedirect: true` (prod)
+   renders a Traefik `Middleware` (`redirectScheme: https`, permanent) and attaches it to the app
+   and shop Ingresses; only when `tlsSecretName` is set, so the k3d rehearsal is unchanged.
+   Result: `GET http://...` -> 301, `POST http://.../mcp` -> 308 (method kept), https -> 200, one hop.
+   Renewal still works: with a temporary staging ACME account (forcing a fresh authorization on
+   the real names), the challenge URL answered 200 over http (no redirect: the solver Ingress is a
+   separate, more specific router) and both `app.` and `shop.` showed `DomainVerified`. The temporary
+   issuer and certificates were deleted afterwards. smoke 13/13, e2e 5/5, netpol ENFORCED after it.
+
 ## Verify
 
 ```

@@ -246,12 +246,13 @@ Let's Encrypt over HTTP-01, `sslip.io` hosts). Full commands and evidence: `docs
   `--set ingress.tlsSecretName=app-tls|shop-tls` (cert-manager Certificates in each namespace).
 - Images built on the box and imported with `k3s ctr images import` (no registry).
 - smoke 13/13 and e2e 5/5 over https, `test-netpol.sh` ENFORCED, all pods restarts 0.
-- The run found 3 problems, all fixed:
+- The run found 4 problems, all fixed:
   - woo-mcp's OAuth signature failed over https (woo-mcp 0.1.6 sends `X-Forwarded-Proto: https`);
   - default-deny would block cert-manager's HTTP-01 solver at renewal
     (`ingress.acmeHttp01: true` adds an allow policy);
   - klipper-lb masqueraded every client to `10.42.0.1`, so Traefik now uses `hostPort` 80/443
     with a ClusterIP Service (a k3s `HelmChartConfig`).
+  - plain http was served; `ingress.httpsRedirect: true` adds a Traefik redirect to https.
 
 ## 8. Upgrade and rollback (Helm 4)
 
