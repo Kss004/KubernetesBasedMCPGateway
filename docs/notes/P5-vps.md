@@ -267,3 +267,17 @@ From an outside review of the repo. Each item checked live on the VPS after the 
    namespace on exit.
 
 After this round: unit tests 68 + 4, smoke 14/14, e2e 5/5, netpol ENFORCED, 0 restarts.
+
+## Review fixes, round 2: SSRF guard (2026-10-21, gateway 0.4.19)
+
+The old guard allowed only in-cluster Services, so an admin could not add a hosted MCP server by
+URL at all. `apps/gateway/src/egress.ts` now allows in-cluster Services (as before) **or** a
+public `https` host, and blocks internal targets twice: every resolved address at save time, and
+again on every connection (a pinned `undici` lookup, so DNS rebinding fails; redirects refused).
+Checked live through the admin API, all `400`, nothing saved:
+`169-254-169-254.sslip.io`, `10-43-0-10.sslip.io` and `127-0-0-1.sslip.io` ("resolves to a
+private or reserved address"), `https://169.254.169.254`, `http://mcp.deepwiki.com` (http),
+`gateway-postgres.urumi-gateway.svc.cluster.local`, `[::ffff:a9fe:a9fe]`, and an unresolvable
+name. From the VPS, the guarded transport connects to `https://mcp.deepwiki.com/mcp` and lists
+its 3 tools. The 3 existing servers stay Connected. Unit tests 78 (10 new for the guard); smoke
+14/14, e2e 5/5.

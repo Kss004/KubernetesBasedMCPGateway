@@ -72,10 +72,16 @@ those four names on every server, not only woo and mock.
 This is also "what happens if an admin adds a malicious or compromised MCP server".
 
 **Contained:**
-- **Scope:** `validUrl` in `servers.ts` limits server URLs to cluster Services in
-  `urumi-store` and `urumi-upstreams`. External hosts, IP literals, `localhost`, userinfo tricks,
-  the cloud metadata address and the gateway's own namespace are rejected. URLs are checked by
-  name only, with no DNS resolution at admission (`// ponytail:` in `servers.ts`).
+- **Scope (SSRF guard, `egress.ts`):** a server URL is either a cluster Service in
+  `urumi-store` / `urumi-upstreams` (by name), or a public `https` host. Rejected at once: IP
+  literals in any form (dotted, decimal, hex, IPv6, IPv4-mapped), `localhost`, internal suffixes
+  (`.svc`, `.cluster.local`, `.internal`, `.local`), userinfo, plain `http` to the outside, and the
+  gateway's own namespace. For a public host, every address it resolves to is checked when the
+  admin saves it; any loopback, private (incl. the k3s pod and Service ranges), link-local (incl.
+  `169.254.169.254`), CGNAT, multicast or reserved address gives a 400. The same check runs again
+  on **every connection** through a pinned DNS lookup, so a name that later re-points inward
+  (DNS rebinding) fails to connect, and redirects are refused so an allowed host cannot bounce
+  the request inward. A stored row that no longer passes is also forced through this check.
 - **No impersonation:** tools are prefixed `<slug>__<tool>`, so a new server cannot shadow
   `woo__*`.
 - **No credential theft:** it receives only its own credential. It never gets user keys or

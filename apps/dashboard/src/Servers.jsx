@@ -163,7 +163,7 @@ function AuthFields({ form, setForm, withSlug, secretHint = 'required unless non
       )}
       <label className="grow">
         URL
-        <input value={form.url} onChange={set('url')} placeholder="http://svc.urumi-upstreams:3000/mcp" required />
+        <input value={form.url} onChange={set('url')} placeholder="http://svc.urumi-upstreams:3000/mcp or https://mcp.example.com/mcp" required />
       </label>
       <label>
         Auth

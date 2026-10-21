@@ -6,10 +6,11 @@
 // never waits on a dead upstream. Stateful upstreams (everything) can drop
 // sessions with 404: callUpstream re-connects once and retries once.
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport, StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Pool as PgPool } from 'pg';
 import { listServers } from './servers.js';
 import { decryptSecret } from './crypto.js';
+import { upstreamTransport } from './egress.js';
 
 export type UpstreamStatus = 'Connected' | 'Unreachable' | 'Disabled';
 export interface UpstreamState {
@@ -105,9 +106,7 @@ export class UpstreamPool {
     try {
       // The SDK transport fetches with its own AbortController and ignores requestInit.signal;
       // only the per-request signal is honored (otherwise probes ran ~13s, not 2s).
-      const transport = new StreamableHTTPClientTransport(new URL(st.url), {
-        requestInit: { headers: this.authHeaders(st) },
-      });
+      const transport = upstreamTransport(st.url, this.authHeaders(st));
       await client.connect(transport, { signal: ctl.signal });
       await client.listTools(undefined, { signal: ctl.signal });
       return true;
@@ -157,9 +156,7 @@ export class UpstreamPool {
       }, timeoutMs);
       try {
         // Per-request signal: the transport ignores requestInit.signal (see probe).
-        const transport = new StreamableHTTPClientTransport(new URL(st.url), {
-          requestInit: { headers: this.authHeaders(st) },
-        });
+        const transport = upstreamTransport(st.url, this.authHeaders(st));
         await client.connect(transport, { signal: ctl.signal });
         return await client.callTool({ name: toolName, arguments: args }, undefined, { signal: ctl.signal });
       } catch (e) {

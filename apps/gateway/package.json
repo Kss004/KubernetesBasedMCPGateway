@@ -12,6 +12,7 @@
     "bcryptjs": "^3.0.3",
     "mcp-mini": "file:../mcp-mini",
     "pg": "8.23.1",
+    "undici": "7.29.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

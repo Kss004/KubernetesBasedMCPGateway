@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { authHeaders, isSessionGone, UpstreamPool } from '../src/pool.ts';
 import { grantsAllow, isToolError } from '../src/router.ts';
+import { testTrustedHosts } from '../src/egress.ts';
 
 describe('authHeaders', () => {
   it('builds bearer and custom-header credentials', () => {
@@ -82,6 +83,7 @@ describe('UpstreamPool timeouts are enforced', () => {
     const hang = http.createServer(() => {}); // accepts, never responds
     await new Promise<void>((r) => hang.listen(0, '127.0.0.1', () => r()));
     const port = (hang.address() as { port: number }).port;
+    testTrustedHosts.add(`127.0.0.1:${port}`); // a local fake upstream, not an SSRF target
     const row = { id: 's1', slug: 'hang', url: `http://127.0.0.1:${port}/mcp`, auth_type: 'none', header_name: null, enabled: true };
     const pg = { query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }) };
     const pool = new UpstreamPool(pg as never, Buffer.alloc(32), 5000, 300);
@@ -108,6 +110,7 @@ describe('Aggregator tool refresh timeout', () => {
     const hang = http.createServer(() => {});
     await new Promise<void>((r) => hang.listen(0, '127.0.0.1', () => r()));
     const port = (hang.address() as { port: number }).port;
+    testTrustedHosts.add(`127.0.0.1:${port}`); // a local fake upstream, not an SSRF target
     const row = { id: 's1', slug: 'hang', url: `http://127.0.0.1:${port}/mcp`, auth_type: 'none', header_name: null, enabled: true };
     const pg = { query: async (sql: string) => ({ rows: sql.includes('FROM servers') ? [row] : [] }) };
     const agg = new Aggregator(pg as never, Buffer.alloc(32), 15000, 300);

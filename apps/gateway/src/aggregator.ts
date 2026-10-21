@@ -6,7 +6,7 @@
 // flag for the dashboard (compromised-upstream defence, R14).
 import { createHash } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { upstreamTransport } from './egress.js';
 import type { Pool as PgPool } from 'pg';
 import { listServers } from './servers.js';
 import { decryptSecret } from './crypto.js';
@@ -128,9 +128,7 @@ export class Aggregator {
     const t = setTimeout(() => ctl.abort(), this.toolTimeoutMs);
     try {
       // Per-request signal: the SDK transport ignores requestInit.signal (see pool.probe).
-      const transport = new StreamableHTTPClientTransport(new URL(url), {
-        requestInit: { headers: await this.headersFor(serverId, s.auth_type, s.header_name) },
-      });
+      const transport = upstreamTransport(url, await this.headersFor(serverId, s.auth_type, s.header_name));
       await client.connect(transport, { signal: ctl.signal });
       const { tools } = await client.listTools(undefined, { signal: ctl.signal });
       const out: PrefixedTool[] = [];

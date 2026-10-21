@@ -5,6 +5,7 @@
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { encryptSecret } from './crypto.js';
+import { checkUrl, classifyUrl } from './egress.js';
 
 export interface ServerRow {
   id: string;
@@ -16,27 +17,14 @@ export interface ServerRow {
   has_secret: boolean;
 }
 
-// T11.2 SSRF guard: upstreams are cluster-internal (D18/D25), so only
-// Service DNS in urumi-store / urumi-upstreams is allowed. Any IP literal is
-// denied (covers loopback 127/8, link-local 169.254/16 incl. 169.254.169.254,
-// and private ranges). Plain hostname check only.
-// Limit: no DNS resolution at admission; a name later resolving to a
-// forbidden IP is not caught — resolve-and-recheck before dialing if that matters.
-export function validUrl(raw: string): boolean {
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-  if (u.username !== '' || u.password !== '') return false;
-  const host = u.hostname.toLowerCase().replace(/\.$/, '');
-  if (host === '') return false;
-  if (host === 'localhost' || host.endsWith('.localhost')) return false;
-  if (/^[\d.]+$/.test(host)) return false; // dotted-decimal / decimal-int IP literal
-  if (host.includes(':')) return false; // any IPv6 literal (::1, fe80::/10, mapped)
-  return /^[a-z0-9-]+\.(urumi-store|urumi-upstreams)(\.svc(\.cluster\.local)?)?$/.test(host);
+// T11.2 SSRF guard: the rules live in egress.ts (in-cluster Services, or public https hosts
+// whose addresses are checked here and again on every connection).
+/** Shape-only check (no DNS), kept for callers that only need a quick yes/no. */
+export const validUrl = (raw: string): boolean => classifyUrl(raw) !== null;
+
+async function assertUrl(raw: string): Promise<void> {
+  const why = await checkUrl(raw);
+  if (why) throw Object.assign(new Error(`invalid url: ${why}`), { status: 400 });
 }
 
 const SLUG = z.string().regex(/^[a-z0-9-]{1,32}$/);
@@ -67,7 +55,7 @@ export async function listServers(pool: Pool): Promise<ServerRow[]> {
 
 export async function createServer(pool: Pool, credKey: Buffer, input: unknown): Promise<ServerRow> {
   const v = Create.parse(input);
-  if (!validUrl(v.url)) throw Object.assign(new Error('invalid url'), { status: 400 });
+  await assertUrl(v.url);
   if (v.auth_type !== 'none' && !v.secret) throw Object.assign(new Error('secret required'), { status: 400 });
   if (v.auth_type === 'header' && !v.header_name) throw Object.assign(new Error('header_name required'), { status: 400 });
   const client = await pool.connect();
@@ -102,7 +90,7 @@ export async function patchServer(
   input: unknown,
 ): Promise<ServerRow | null> {
   const v = Patch.parse(input);
-  if (v.url !== undefined && !validUrl(v.url)) throw Object.assign(new Error('invalid url'), { status: 400 });
+  if (v.url !== undefined) await assertUrl(v.url);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
