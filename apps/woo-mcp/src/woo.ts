@@ -62,12 +62,38 @@ export function wooRequest<T>(
   query: Record<string, string> = {},
   body?: unknown,
 ): Promise<T> {
+  return wooFetch<T>(cfg, method, path, query, body).then((r) => r.json);
+}
+
+// A GET of a WooCommerce collection plus its paging headers (X-WP-Total, X-WP-TotalPages),
+// so tools can say how many items and pages exist instead of guessing from the page size.
+export async function wooList<T>(
+  cfg: WooConfig,
+  path: string,
+  query: Record<string, string> = {},
+): Promise<{ items: T[]; total: number; totalPages: number }> {
+  const { json, headers } = await wooFetch<T[]>(cfg, 'GET', path, query);
+  const items = Array.isArray(json) ? json : [];
+  const num = (h: string | string[] | undefined, dflt: number) => {
+    const n = Number(Array.isArray(h) ? h[0] : h);
+    return Number.isFinite(n) && n >= 0 ? n : dflt;
+  };
+  return { items, total: num(headers['x-wp-total'], items.length), totalPages: num(headers['x-wp-totalpages'], 1) };
+}
+
+function wooFetch<T>(
+  cfg: WooConfig,
+  method: 'GET' | 'POST' | 'PUT',
+  path: string,
+  query: Record<string, string> = {},
+  body?: unknown,
+): Promise<{ json: T; headers: http.IncomingHttpHeaders }> {
   const signedPath = signRequest(method, path, query, cfg.consumerKey, cfg.consumerSecret);
   const url = new URL(signedPath, cfg.serviceBase);
   const home = new URL(cfg.homeBase);
   const host = home.host;
   const payload = body === undefined ? undefined : JSON.stringify(body);
-  return new Promise<T>((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const req = http.request(
       url,
       {
@@ -95,7 +121,7 @@ export function wooRequest<T>(
               (json as { message?: string } | null)?.message ?? text.slice(0, 200);
             return reject(new Error(`woo: ${(res.statusCode ?? 0)} ${msg}`));
           }
-          resolve(json as T);
+          resolve({ json: json as T, headers: res.headers });
         });
       },
     );

@@ -48,16 +48,25 @@ describe('orderDetail (E2E L12)', () => {
   });
 });
 
-describe('orderSummary (E2E round 5 bug 1)', () => {
-  it('returns an exact count and total, in cents, with a completeness flag', async () => {
+describe('orderSummary (E2E round 5 bug 1, paging + currency)', () => {
+  const o = (id: number, total: string) => ({ id, status: 'processing', total, currency: 'USD', date_created: 'x' });
+  const usd = { code: 'USD', symbol: '$' };
+  it('totals every matching order, in cents, and returns only the requested page', async () => {
     const { orderSummary } = await import('../src/tools.ts');
-    const o = (id: number, total: string) => ({ id, status: 'processing', total, date_created: 'x' });
-    const orders = [...Array.from({ length: 12 }, (_, i) => o(i + 1, '9.99')), o(13, '20.00'), o(14, '21.50')];
-    const s = orderSummary(orders, 100);
+    const all = [...Array.from({ length: 12 }, (_, i) => o(i + 1, '9.99')), o(13, '20.00'), o(14, '21.50')];
+    const s = orderSummary(all, all.slice(5, 10), { page: 2, perPage: 5, totalOrders: 14, totalPages: 3 }, usd);
     assert.equal(s.count, 14);
     assert.equal(s.total, '161.38'); // 12 x 9.99 + 20.00 + 21.50, the round 5 true total
     assert.equal(s.complete, true);
-    assert.equal(s.orders.length, 14);
-    assert.equal(orderSummary(orders.slice(0, 2), 2).complete, false);
+    assert.equal(s.currency, 'USD');
+    assert.deepEqual([s.page, s.per_page, s.total_pages], [2, 5, 3]);
+    assert.deepEqual(s.orders.map((x) => x.id), [6, 7, 8, 9, 10]);
+    assert.equal(s.orders[0].currency, 'USD');
+  });
+  it('flags an incomplete total when not every order was summed', async () => {
+    const { orderSummary } = await import('../src/tools.ts');
+    const s = orderSummary([o(1, '1.00')], [o(1, '1.00')], { page: 1, perPage: 1, totalOrders: 2000, totalPages: 2000 }, usd);
+    assert.equal(s.complete, false);
+    assert.equal(s.count, 2000);
   });
 });

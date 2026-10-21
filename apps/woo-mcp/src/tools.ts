@@ -3,7 +3,7 @@
 // list_orders takes after/before so "orders today" is answerable.
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { wooRequest, type WooConfig } from './woo.js';
+import { wooRequest, wooList, type WooConfig } from './woo.js';
 
 interface WProduct {
   id: number;
@@ -17,6 +17,7 @@ interface WOrder {
   id: number;
   status: string;
   total: string;
+  currency?: string;
   date_created: string;
   payment_method_title?: string;
 }
@@ -32,6 +33,7 @@ const slimOrder = (o: WOrder) => ({
   id: o.id,
   status: o.status,
   total: o.total,
+  currency: o.currency,
   created: o.date_created,
   payment: o.payment_method_title,
 });
@@ -65,15 +67,42 @@ export const orderDetail = (o: WOrder & {
   shipping: addr(o.shipping),
 });
 
+// Store currency (Settings -> General), read once. Bare amounts made the model guess the
+// currency; every price and total now travels with its ISO code.
+export type Currency = { code: string; symbol: string };
+let currency: Promise<Currency> | null = null;
+const decode = (s: string) => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+export function storeCurrency(cfg: WooConfig): Promise<Currency> {
+  currency ??= wooRequest<{ code?: string; symbol?: string }>(cfg, 'GET', '/wp-json/wc/v3/data/currencies/current')
+    .then((c) => ({ code: c.code ?? '', symbol: decode(c.symbol ?? '') }))
+    .catch((e) => {
+      currency = null; // retry next call instead of caching the failure
+      throw e;
+    });
+  return currency;
+}
+
 // E2E round 5 bug 1: the model added up order totals itself and got them wrong every time.
-// Return the count and total computed here (in cents, so no float drift) next to the orders.
-export const orderSummary = (orders: WOrder[], perPage: number) => {
-  const cents = orders.reduce((sum, o) => sum + Math.round(Number(o.total) * 100), 0);
+// count/total cover every order matching the filters (all pages, in cents so no float drift);
+// orders is just the requested page. complete=false only past MAX_SUM_ORDERS.
+export const MAX_SUM_ORDERS = 1000;
+export const orderSummary = (
+  all: WOrder[],
+  pageOrders: WOrder[],
+  paging: { page: number; perPage: number; totalOrders: number; totalPages: number },
+  cur: Currency,
+) => {
+  const cents = all.reduce((sum, o) => sum + Math.round(Number(o.total) * 100), 0);
   return {
-    count: orders.length,
+    currency: cur.code,
+    symbol: cur.symbol,
+    count: paging.totalOrders,
     total: (cents / 100).toFixed(2),
-    complete: orders.length < perPage, // false: there may be more pages
-    orders: orders.map(slimOrder),
+    complete: all.length >= paging.totalOrders,
+    page: paging.page,
+    per_page: paging.perPage,
+    total_pages: paging.totalPages,
+    orders: pageOrders.map(slimOrder),
   };
 };
 
@@ -83,7 +112,8 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
   server.registerTool(
     'list_products',
     {
-      description: 'List store products with id, name, price and stock status.',
+      description:
+        'List store products with id, name, price and stock status. Prices are in the returned currency; page/total_pages/total_products describe paging.',
       inputSchema: {
         search: z.string().optional(),
         status: z.enum(['publish', 'draft', 'any']).optional(),
@@ -91,15 +121,28 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
         per_page: z.number().int().min(1).max(100).optional(),
       },
     },
-    async (args) =>
-      text(
-        ((await wooRequest<WProduct[]>(cfg, 'GET', '/wp-json/wc/v3/products', {
+    async (args) => {
+      const page = args.page ?? 1;
+      const perPage = args.per_page ?? 20;
+      const [res, cur] = await Promise.all([
+        wooList<WProduct>(cfg, '/wp-json/wc/v3/products', {
           ...(args.search ? { search: args.search } : {}),
           ...(args.status && args.status !== 'any' ? { status: args.status } : {}),
-          page: String(args.page ?? 1),
-          per_page: String(args.per_page ?? 20),
-        })) as WProduct[]).map(slimProduct),
-      ),
+          page: String(page),
+          per_page: String(perPage),
+        }),
+        storeCurrency(cfg),
+      ]);
+      return text({
+        currency: cur.code,
+        symbol: cur.symbol,
+        page,
+        per_page: perPage,
+        total_pages: res.totalPages,
+        total_products: res.total,
+        products: res.items.map(slimProduct),
+      });
+    },
   );
 
   server.registerTool(
@@ -113,25 +156,26 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
         status: z.enum(['publish', 'draft']).default('publish'),
       },
     },
-    async (args) =>
-      text(
-        slimProduct(
-          await wooRequest<WProduct>(cfg, 'POST', '/wp-json/wc/v3/products', {}, {
-            name: args.name,
-            type: 'simple',
-            regular_price: args.price,
-            description: args.description ?? '',
-            status: args.status,
-          }),
-        ),
-      ),
+    async (args) => {
+      const [p, cur] = await Promise.all([
+        wooRequest<WProduct>(cfg, 'POST', '/wp-json/wc/v3/products', {}, {
+          name: args.name,
+          type: 'simple',
+          regular_price: args.price,
+          description: args.description ?? '',
+          status: args.status,
+        }),
+        storeCurrency(cfg),
+      ]);
+      return text({ ...slimProduct(p), currency: cur.code });
+    },
   );
 
   server.registerTool(
     'list_orders',
     {
       description:
-        'List orders, filterable by date range and status. Returns count and total (sum of order totals) for the returned orders; complete=false means more pages exist.',
+        'List orders, filterable by date range and status. count and total (with currency) cover ALL matching orders across every page; orders holds only the requested page (page/total_pages).',
       inputSchema: {
         after: z.string().optional(),
         before: z.string().optional(),
@@ -141,15 +185,32 @@ export function registerTools(server: McpServer, cfg: WooConfig): void {
       },
     },
     async (args) => {
-      const perPage = args.per_page ?? 100; // a whole day in one page, so count and total cover it
-      const orders = (await wooRequest<WOrder[]>(cfg, 'GET', '/wp-json/wc/v3/orders', {
+      const page = args.page ?? 1;
+      const perPage = args.per_page ?? 100;
+      const filters = {
         ...(args.after ? { after: args.after } : {}),
         ...(args.before ? { before: args.before } : {}),
         ...(args.status ? { status: args.status } : {}),
-        page: String(args.page ?? 1),
-        per_page: String(perPage),
-      })) as WOrder[];
-      return text(orderSummary(orders, perPage));
+      };
+      const path = '/wp-json/wc/v3/orders';
+      const [res, cur] = await Promise.all([
+        wooList<WOrder>(cfg, path, { ...filters, page: String(page), per_page: String(perPage) }),
+        storeCurrency(cfg),
+      ]);
+      // Totals over every matching order: reuse this page when it already holds them all,
+      // else walk the filter in 100s (one request per 100 orders, capped at MAX_SUM_ORDERS).
+      let all = res.items;
+      if (res.total > res.items.length) {
+        all = [];
+        for (let p = 1; p <= Math.ceil(Math.min(res.total, MAX_SUM_ORDERS) / 100); p++) {
+          const chunk = await wooList<WOrder>(cfg, path, { ...filters, page: String(p), per_page: '100' });
+          all.push(...chunk.items);
+          if (chunk.items.length < 100) break;
+        }
+      }
+      return text(
+        orderSummary(all, res.items, { page, perPage, totalOrders: res.total, totalPages: res.totalPages }, cur),
+      );
     },
   );
 
