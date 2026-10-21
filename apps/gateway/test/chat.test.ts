@@ -234,7 +234,7 @@ describe('chatCompletions', () => {
   });
 });
 
-describe('handleChat permissions (bug 1)', () => {
+describe('handleChat permissions', () => {
   it('hides and rejects member-denied tools, audits the attempt as denied', async () => {
     const mk = (name: string) => ({ name, description: 'd', inputSchema: { type: 'object' }, serverId: 's1', serverSlug: 'woo', changed: false });
     const tools = [mk('woo__list_orders'), mk('woo__create_product')];
@@ -266,7 +266,7 @@ describe('handleChat permissions (bug 1)', () => {
   });
 });
 
-describe('E2E round 1 fixes', () => {
+describe('chat request handling', () => {
   it('H1/L5: prompt forces fresh tool calls for store facts and plain text', () => {
     const p = buildSystemPrompt();
     assert.match(p, /must come only from tool results in this reply/);
@@ -296,7 +296,7 @@ describe('E2E round 1 fixes', () => {
   });
 });
 
-describe('H1 guard: no store data without a tool in this request (E2E round 2)', () => {
+describe('guard: no store data without a tool in this request', () => {
   const run = async (script: LlmTurn[], user = 'What orders came in today?') => {
     const messages: LlmMessage[] = [
       { role: 'system', content: 's' },
@@ -319,7 +319,7 @@ describe('H1 guard: no store data without a tool in this request (E2E round 2)',
   const say = (content: string): LlmTurn => ({ content, toolCalls: [] });
   const call = (name: string): LlmTurn => ({ content: '', toolCalls: [{ id: 't1', name, argsText: '{}' }] });
 
-  it('the round 2 repro: invented orders are never shown; one nudge, then the tool runs', async () => {
+  it('repro: invented orders are never shown; one nudge, then the tool runs', async () => {
     const r = await run([say('3 orders today: #25 $10000.00 Test Lamp, #31 $30.00'), call('woo__list_orders'), say('1 order today: #26 $20.00')]);
     assert.deepEqual(r.text, ['1 order today: #26 $20.00']);
     assert.deepEqual(r.tools, ['woo__list_orders']);
@@ -346,7 +346,7 @@ describe('H1 guard: no store data without a tool in this request (E2E round 2)',
   });
 });
 
-describe('rate limit shows as plain text (E2E R2)', () => {
+describe('rate limit shows as plain text', () => {
   it('a 429 that survives the retry is sent as a text event, not an error event', async () => {
     const chunks: string[] = [];
     const res = { writableEnded: false, writeHead: () => {}, write: (c: string) => (chunks.push(String(c)), true), end: () => {}, on: () => {} };
@@ -376,14 +376,14 @@ describe('store timezone for "today" (bug: orders today used UTC)', () => {
   });
 });
 
-describe('exact today range in the prompt (E2E N8)', () => {
+describe('exact today range in the prompt', () => {
   it('spells out after/before for the store day', () => {
     const p = buildSystemPrompt(new Date('2026-10-19T20:30:00Z'), 'Asia/Kolkata');
     assert.ok(p.includes('after="2026-10-20T00:00:00" and before="2026-10-20T23:59:59"'));
   });
 });
 
-describe('no leaked reasoning (E2E round 6)', () => {
+describe('no leaked reasoning', () => {
   it('strips <think> blocks, including an unclosed one, from model content', async () => {
     const { stripThinking } = await import('../src/chat.ts');
     assert.equal(stripThinking('<think>I should call a tool</think>\nNo tool can convert currency.'), 'No tool can convert currency.');
@@ -397,7 +397,7 @@ describe('no leaked reasoning (E2E round 6)', () => {
   });
 });
 
-describe('rate-limit log detail (E2E round 7)', () => {
+describe('rate-limit log detail', () => {
   it('a final 429 carries retry-after and x-ratelimit-* headers for the log', async () => {
     const cfg = { baseUrl: 'https://llm.test/v1', model: 'm', apiKey: 'k' };
     const r429 = () =>

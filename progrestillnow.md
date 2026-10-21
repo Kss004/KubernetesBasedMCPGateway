@@ -74,7 +74,6 @@ The earlier draft had the Mac mini running everything. Rejected: a remote kind c
 
 ### PC setup (WSL2)
 
-- Full steps and troubleshooting: `windows-coding-setup.md`.
 - WSL2 + Ubuntu 24.04. Repo in the repo root on the WSL filesystem, **not** `/mnt/c`.
 - `%UserProfile%\.wslconfig`: `memory=20GB`, `processors=8`, `swap=8GB`.
 - Docker Desktop with the WSL2 backend. Do not also install native Docker Engine in WSL2.

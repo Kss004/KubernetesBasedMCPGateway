@@ -28,7 +28,7 @@ describe('signRequest', () => {
   });
 });
 
-describe('orderDetail (E2E L12)', () => {
+describe('orderDetail', () => {
   it('keeps totals, items and addresses; drops order_key and customer PII', async () => {
     const { orderDetail } = await import('../src/tools.ts');
     const raw = {
@@ -48,7 +48,7 @@ describe('orderDetail (E2E L12)', () => {
   });
 });
 
-describe('orderSummary (E2E round 5 bug 1, paging + currency)', () => {
+describe('orderSummary (paging + currency)', () => {
   const o = (id: number, total: string) => ({ id, status: 'processing', total, currency: 'USD', date_created: 'x' });
   const usd = { code: 'USD', symbol: '$' };
   it('totals every matching order, in cents, and returns only the requested page', async () => {
@@ -56,7 +56,7 @@ describe('orderSummary (E2E round 5 bug 1, paging + currency)', () => {
     const all = [...Array.from({ length: 12 }, (_, i) => o(i + 1, '9.99')), o(13, '20.00'), o(14, '21.50')];
     const s = orderSummary(all, all.slice(5, 10), { page: 2, perPage: 5, totalOrders: 14, totalPages: 3 }, usd);
     assert.equal(s.count, 14);
-    assert.equal(s.total, '161.38'); // 12 x 9.99 + 20.00 + 21.50, the round 5 true total
+    assert.equal(s.total, '161.38'); // 12 x 9.99 + 20.00 + 21.50, the true total
     assert.equal(s.complete, true);
     assert.equal(s.currency, 'USD');
     assert.deepEqual([s.page, s.per_page, s.total_pages], [2, 5, 3]);

@@ -25,10 +25,10 @@ check "/api/me without session is 401" test "$(code "$PROTO://$APP/api/me")" = 4
 check "/mcp without key is 401" test "$(code -X POST "$PROTO://$APP/mcp" -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = 401
 check "/mcp with bad key is 401" test "$(code -X POST "$PROTO://$APP/mcp" -H 'Authorization: Bearer nope' -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')" = 401
 check "admin API rejects missing auth" test "$(code "$PROTO://$APP/api/servers")" = 401
-# grep, not node: works from a non-interactive shell without nvm on PATH (E2E L9).
+# grep, not node: works from a non-interactive shell without nvm on PATH.
 UPS=$(curl -s "$PROTO://$APP/api/upstreams" -H "Authorization: Bearer $TOKEN" | grep -o '{[^{}]*}')
 check "every enabled upstream is Connected" bash -c "[ \$(echo '$UPS' | grep -c '\"slug\"') -ge 3 ] && ! echo '$UPS' | grep '\"enabled\":true' | grep -vq '\"status\":\"Connected\"'"
-# Must read a real 200 server list first, or a failed auth would pass this check (E2E L9).
+# Must read a real 200 server list first, or a failed auth would pass this check.
 SRV_CODE=$(curl -s -o /tmp/smoke-servers.$$ -w '%{http_code}' "$PROTO://$APP/api/servers" -H "Authorization: Bearer $TOKEN")
 check "upstream credentials never returned" bash -c "[ '$SRV_CODE' = 200 ] && grep -q '\"slug\"' /tmp/smoke-servers.$$ && ! grep -qi '\"secret\"\\|enc_secret' /tmp/smoke-servers.$$"
 rm -f /tmp/smoke-servers.$$

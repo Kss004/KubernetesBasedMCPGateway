@@ -6,7 +6,7 @@ import { api, guard } from './api.js';
 const EMPTY = { slug: '', url: '', auth_type: 'none', header_name: '', secret: '' };
 
 export default function Servers({ setStatus }) {
-  const [servers, setServers] = useState(null); // null = not loaded yet (E2E N5: no empty-state flash)
+  const [servers, setServers] = useState(null); // null = not loaded yet (no empty-state flash)
   const [health, setHealth] = useState({});
   const [tools, setTools] = useState({});
   const [editing, setEditing] = useState(null); // server id

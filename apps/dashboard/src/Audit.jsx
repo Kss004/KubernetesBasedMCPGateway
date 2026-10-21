@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, guard } from './api.js';
 
 export default function Audit({ me, setStatus }) {
-  const [rows, setRows] = useState(null); // null = not loaded yet (E2E N7: no empty-state flash)
+  const [rows, setRows] = useState(null); // null = not loaded yet (no empty-state flash)
   const [user, setUser] = useState('');
 
   const load = useCallback(async () => setRows((await api('/api/audit')).audit), []);

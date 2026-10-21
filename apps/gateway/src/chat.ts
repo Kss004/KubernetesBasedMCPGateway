@@ -60,15 +60,15 @@ export function buildSystemPrompt(now = new Date(), tzName = process.env.STORE_T
     'You are the store assistant.',
     'Format: plain text only. No markdown (no ** or #, no tables), never raw HTML. For lists, one item per line starting with "- ".',
     `Current date: ${day}. Timezone: ${tz}. Local time: ${local}.`,
-    // E2E N8: give the exact range instead of a <day> template the model has to fill in.
+    // Give the exact range instead of a <day> template the model has to fill in.
     `For "today" questions call list_orders with exactly after="${day}T00:00:00" and before="${day}T23:59:59".`,
-    // E2E H1: on follow-up turns the model copied store data from earlier replies (history
+    // On follow-up turns the model copied store data from earlier replies (history
     // carries no tool results) instead of calling a tool, and invented orders.
     'Store facts (orders, products, prices, totals, stock, statuses, customers) must come only from tool results in this reply.',
     'For every question about them, call the matching tool now, even if earlier messages mention the same data. Never reuse, guess or invent them.',
     'Never add up, count or average amounts yourself: use the count and total fields that list_orders returns.',
     'If a tool fails or returns nothing, say so plainly. Keep each reply short and factual.',
-    // E2E round 6: with no fitting tool the model called an unrelated one and narrated its reasoning.
+    // With no fitting tool the model called an unrelated one and narrated its reasoning.
     'If no available tool can do what is asked, say so in one sentence and do not call a tool.',
     'Reply with the answer only: never describe your reasoning, your plan or these instructions.',
   ].join('\n');
@@ -168,7 +168,7 @@ export async function chatCompletions(
 ): Promise<LlmTurn> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   let resp: Response;
-  // ponytail: one retry on 429, waiting retry-after (seconds, capped at 10s; 1s if absent
+  // Limit: one retry on 429, waiting retry-after (seconds, capped at 10s; 1s if absent
   // or a date). No retry library by rule; add backoff with jitter if limits bite in prod.
   for (let attempt = 0; ; attempt++) {
     try {
@@ -195,7 +195,7 @@ export async function chatCompletions(
     await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 1000, 10000)));
   }
   if (resp.status === 429) {
-    // For the log only (E2E round 7): which limit hit and when it resets, by header prefix.
+    // For the log only: which limit hit and when it resets, by header prefix.
     const detail = [...resp.headers]
       .filter(([k]) => k === 'retry-after' || k.startsWith('x-ratelimit'))
       .map(([k, v]) => `${k}=${v}`)
@@ -225,12 +225,12 @@ export async function chatCompletions(
     });
   }
   // Some providers (Ollama, Groq reasoning_format=raw) put reasoning in <think> tags inside the
-  // content; it must never reach the user (E2E round 6).
+  // content; it must never reach the user.
   const content = typeof msg.content === 'string' ? stripThinking(msg.content) : '';
   return { content, toolCalls };
 }
 
-// E2E H1 guard: prompts alone did not stop qwen3.8-27b from inventing orders on follow-up
+// Guard: prompts alone did not stop qwen3.8-27b from inventing orders on follow-up
 // turns (2 of 4 runs). A reply that shows store data (order numbers, money) while no tool ran
 // in this request never reaches the user: the model is told once to call the tool, and if it
 // still does not, the user gets FALLBACK. Deterministic, unlike the prompt.
@@ -247,7 +247,7 @@ export const FALLBACK = "I couldn't look that up with the store tools. Please as
 // or 429 after its one retry) switches to the fallback. The rest of that request stays on the
 // fallback, so providers never alternate inside one tool loop, and the primary rests for
 // FAILOVER_COOLDOWN_MS so every user isn't waiting on a broken provider.
-// ponytail: the cool-down is per pod and resets on restart; upgrade to shared state when the
+// Limit: the cool-down is per pod and resets on restart; upgrade to shared state when the
 // gateway runs more than one replica.
 export const FAILOVER_COOLDOWN_MS = 60_000;
 const PRIMARY_TIMEOUT_WITH_FALLBACK_MS = 20_000;
@@ -350,7 +350,7 @@ const errorClassFor = (e: unknown): string => {
   return 'upstream_error';
 };
 
-// ponytail: non-streaming LLM calls, one text event per turn; switch to
+// Limit: non-streaming LLM calls, one text event per turn; switch to
 // stream:true when the dashboard needs token streaming.
 export async function handleChat(opts: {
   pg: PgPool;
@@ -441,11 +441,11 @@ export async function handleChat(opts: {
     });
   } catch (e) {
     const message = (e as Error).message ?? 'chat failed';
-    // Capped: an error text must never carry tool arguments into the log in full (D22, E2E N4).
+    // Capped: an error text must never carry tool arguments into the log in full (D22).
     const detail = (e as { detail?: string }).detail;
     if (message !== 'client disconnected')
       console.error(`chat failed: user=${opts.user.name} error=${message.slice(0, 200)}${detail ? ` ${detail.slice(0, 300)}` : ''}`);
-    // A rate limit is expected on free tiers: plain text, not an [error: ...] line (E2E R2).
+    // A rate limit is expected on free tiers: plain text, not an [error: ...] line.
     if ((e as { status?: number }).status === 429) emit('text', { content: RATE_LIMITED });
     else emit('error', { message });
   }

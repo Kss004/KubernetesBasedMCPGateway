@@ -12,7 +12,7 @@ export const checkPassword = (pw: string, hash: string): Promise<boolean> => bcr
 const DUMMY = '$2b$10$C6UzMDM.H6dfI/f/IKc8OOuDvDvDvDvDvDvDvDvDvDvDvDvDvDvD.';
 export const checkPasswordDummy = (pw: string): Promise<boolean> => bcrypt.compare(pw, DUMMY);
 
-// v2 adds the user's session_version (bug 6: logout ends the session server-side).
+// v2 adds the user's session_version (logout ends the session server-side).
 // v1 tokens no longer verify, so the deploy logs everyone out once.
 const PREFIX = 'v2';
 
@@ -56,9 +56,9 @@ export function parseCookies(header: string | undefined): Record<string, string>
   return out;
 }
 
-// Bug 6: login rate limit. 5 failures in 15 min on a key (client IP or user name) lock that
+// Login rate limit. 5 failures in 15 min on a key (client IP or user name) lock that
 // key for 1 min. Checked before bcrypt and identical for unknown names (no enumeration).
-// ponytail: in-memory per pod and reset on restart; ceiling = one gateway replica.
+// Limit: in-memory per pod and reset on restart; ceiling = one gateway replica.
 // Upgrade: a shared store (Postgres or Redis) when the gateway runs more than one replica.
 export class LoginLimiter {
   private entries = new Map<string, { count: number; first: number; lockedUntil: number }>();

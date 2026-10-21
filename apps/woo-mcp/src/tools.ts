@@ -39,7 +39,7 @@ const slimOrder = (o: WOrder) => ({
 });
 
 // get_order: an allowlist, not the raw order. The raw one carries order_key (opens the
-// order-received page), customer IP, user agent, email, phone and meta_data (E2E L12).
+// order-received page), customer IP, user agent, email, phone and meta_data.
 type WAddr = { first_name?: string; last_name?: string; address_1?: string; city?: string; state?: string; postcode?: string; country?: string };
 const addr = (a?: WAddr) =>
   a && {
@@ -82,7 +82,7 @@ export function storeCurrency(cfg: WooConfig): Promise<Currency> {
   return currency;
 }
 
-// E2E round 5 bug 1: the model added up order totals itself and got them wrong every time.
+// Totals are computed here: when the model added up order totals itself it got them wrong.
 // count/total cover every order matching the filters (all pages, in cents so no float drift);
 // orders is just the requested page. complete=false only past MAX_SUM_ORDERS.
 export const MAX_SUM_ORDERS = 1000;

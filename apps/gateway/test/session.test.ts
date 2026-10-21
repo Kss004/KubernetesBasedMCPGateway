@@ -23,7 +23,7 @@ describe('session', () => {
   });
 });
 
-describe('LoginLimiter (bug 6)', () => {
+describe('LoginLimiter', () => {
   it('locks a key for 1 min after 5 failures in the window, then frees it', async () => {
     const { LoginLimiter } = await import('../src/session.ts');
     let t = 0;
@@ -59,7 +59,7 @@ describe('LoginLimiter (bug 6)', () => {
   });
 });
 
-describe('session versions (bug 6: logout invalidation)', () => {
+describe('session versions (logout invalidation)', () => {
   it('signs the version, so it cannot be edited, and rejects old v1 tokens', () => {
     const t = mintSession('user-1', 3, SECRET);
     const parts = t.split('.');

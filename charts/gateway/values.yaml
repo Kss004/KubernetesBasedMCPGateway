@@ -35,7 +35,7 @@ storage:
 storeTimezone: "UTC"
 
 session:
-  # Bug 6: adds Secure to the session cookie. Keep false over plain http (kind, k3d):
+  # Adds Secure to the session cookie. Keep false over plain http (kind, k3d):
   # browsers drop Secure cookies on http and login would silently fail.
   cookieSecure: false
 

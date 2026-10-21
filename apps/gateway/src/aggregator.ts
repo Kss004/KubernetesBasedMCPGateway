@@ -127,7 +127,7 @@ export class Aggregator {
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), this.toolTimeoutMs);
     try {
-      // Per-request signal: the SDK transport ignores requestInit.signal (E2E M3, see pool.probe).
+      // Per-request signal: the SDK transport ignores requestInit.signal (see pool.probe).
       const transport = new StreamableHTTPClientTransport(new URL(url), {
         requestInit: { headers: await this.headersFor(serverId, s.auth_type, s.header_name) },
       });

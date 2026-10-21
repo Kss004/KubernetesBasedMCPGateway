@@ -69,7 +69,7 @@ export function serve(opts: ServeOptions): void {
   });
   server.listen(opts.port, () => console.log(`${opts.name} on :${opts.port}`));
   // Node as PID 1 has no default SIGTERM handler, so without this a pod ignores scale-down
-  // and keeps answering until SIGKILL at the end of its grace period (E2E M3).
+  // and keeps answering until SIGKILL at the end of its grace period.
   process.on('SIGTERM', () => {
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref();

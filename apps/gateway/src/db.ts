@@ -1,4 +1,4 @@
-// Plain pg Pool + numbered idempotent migrations (no ORM, ponytail rule).
+// Plain pg Pool + numbered idempotent migrations (no ORM).
 import { Pool } from 'pg';
 
 export type Migration = { version: number; sql: string };
@@ -73,7 +73,7 @@ const MIGRATIONS: Migration[] = [
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text;`,
   },
   {
-    // Bug 6: logout invalidation. Session tokens carry this number; logout and a password
+    // Logout invalidation. Session tokens carry this number; logout and a password
     // reset bump it, so every earlier token for the user stops working.
     version: 5,
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version int NOT NULL DEFAULT 0;`,

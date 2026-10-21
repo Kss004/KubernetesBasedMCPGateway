@@ -1,4 +1,4 @@
-// E2E round 5 bug 2: validation errors are 400 with a short message, not 500 with raw JSON.
+// Validation errors are 400 with a short message, not 500 with raw JSON.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';

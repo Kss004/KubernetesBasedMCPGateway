@@ -1,4 +1,4 @@
-// Shared upstream auth headers (bug 2), safe retry rule (bug 3), in-band tool errors.
+// Shared upstream auth headers, safe retry rule, in-band tool errors.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { StreamableHTTPError } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -57,7 +57,7 @@ describe('UpstreamPool.refreshNow', () => {
   });
 });
 
-describe('UpstreamPool outage detection (E2E M3)', () => {
+describe('UpstreamPool outage detection', () => {
   it('marks Unreachable on the 2nd consecutive failed probe, with no skipped tick', async () => {
     const row = { id: 's1', slug: 'everything', url: 'http://x/mcp', auth_type: 'none', header_name: null, enabled: true };
     let up = true;
@@ -75,8 +75,8 @@ describe('UpstreamPool outage detection (E2E M3)', () => {
 });
 
 // Bounds are loose (5s vs 300-400ms timeouts) so a loaded machine cannot flake them; the bug
-// they guard against took 13-65s (E2E round 5/7 flake reports).
-describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
+// they guard against took 13-65s in earlier test runs.
+describe('UpstreamPool timeouts are enforced', () => {
   it('a probe and a tool call to an upstream that never answers fail at our timeout', async () => {
     const http = await import('node:http');
     const hang = http.createServer(() => {}); // accepts, never responds
@@ -101,7 +101,7 @@ describe('UpstreamPool timeouts are enforced (E2E M3)', () => {
   });
 });
 
-describe('Aggregator tool refresh timeout (E2E M3)', () => {
+describe('Aggregator tool refresh timeout', () => {
   it('a refresh against an upstream that never answers ends at the tool timeout', async () => {
     const { Aggregator } = await import('../src/aggregator.ts');
     const http = await import('node:http');

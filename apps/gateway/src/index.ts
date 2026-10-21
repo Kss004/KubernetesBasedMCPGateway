@@ -31,7 +31,7 @@ import {
 
 const cfg = loadConfig();
 const loginLimiter = new LoginLimiter();
-// Bug 6: Secure only when served over https (values-prod), or http login would break.
+// Secure only when served over https (values-prod), or http login would break.
 const COOKIE_FLAGS = `HttpOnly; Path=/; SameSite=Lax${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 const pool = createPool(cfg.pg);
 // Postgres may still be booting after a node restart; retry instead of
@@ -77,7 +77,7 @@ async function sessionUser(req: http.IncomingMessage): Promise<SessionUser | nul
   if (!token) return null;
   const v = verifySession(token, SESSION_SECRET);
   if (!v) return null;
-  // The version check is what makes logout and a password reset end earlier sessions (bug 6).
+  // The version check is what makes logout and a password reset end earlier sessions.
   const { rows } = await pool.query('SELECT id, name, role FROM users WHERE id = $1 AND session_version = $2', [
     v.userId,
     v.version,
@@ -88,7 +88,7 @@ async function sessionUser(req: http.IncomingMessage): Promise<SessionUser | nul
 // Session-authed mutations need a JSON content type (CSRF defence).
 const isJsonReq = (req: http.IncomingMessage): boolean =>
   (req.headers['content-type'] ?? '').includes('application/json');
-// 401 = not authenticated; 403 = signed in but not an admin, or a non-JSON write (CSRF guard). E2E L7.
+// 401 = not authenticated; 403 = signed in but not an admin, or a non-JSON write (CSRF guard).
 async function requireAdmin(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
   if (isAdmin(req)) return true;
   const u = await sessionUser(req);
@@ -147,7 +147,7 @@ const dashDir = (() => {
 })();
 const dashFiles = dashDir ? loadDashFiles(dashDir) : new Map<string, DashFile>();
 
-// Bug 6: security headers on every response (dashboard, API, /mcp). The Vite build has no
+// Security headers on every response (dashboard, API, /mcp). The Vite build has no
 // inline scripts or styles and loads nothing cross-origin, so CSP needs no exceptions;
 // React style props go through the CSSOM, which CSP does not block.
 const SECURITY_HEADERS: Record<string, string> = {
@@ -187,7 +187,7 @@ const server = http.createServer(async (req, res) => {
           auth: req.headers.authorization ?? '',
           body,
         });
-        // RFC 6750: tells MCP clients this endpoint wants a bearer key (E2E L8).
+        // RFC 6750: tells MCP clients this endpoint wants a bearer key.
         if (out.status === 401) res.setHeader('WWW-Authenticate', 'Bearer realm="harbor"');
         send(res, out.status, out.json);
       } catch (e) {
@@ -304,7 +304,7 @@ const server = http.createServer(async (req, res) => {
         const mp = /^\/api\/users\/([0-9a-f-]{36})\/password$/.exec(req.url ?? '');
         if (req.method === 'POST' && mp) {
           const v = z.object({ password: z.string().min(8).max(256) }).parse(await readJson(req));
-          // A new password also ends the user's existing sessions (bug 6).
+          // A new password also ends the user's existing sessions.
           const { rowCount } = await pool.query('UPDATE users SET password_hash = $1, session_version = session_version + 1 WHERE id = $2', [
             await hashPassword(v.password),
             mp[1],
@@ -389,13 +389,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.url === '/api/logout' && req.method === 'POST') {
-      // Same CSRF rule as other session writes: a cross-site form cannot log a user out (E2E round 5).
+      // Same CSRF rule as other session writes: a cross-site form cannot log a user out.
       if (!isJsonReq(req)) {
         send(res, 403, { error: 'json content type required' });
         return;
       }
       // Bump the version so a copied cookie stops working, not just this browser's copy.
-      // Trade-off: ends all of this user's sessions (every device). Bug 6.
+      // Trade-off: ends all of this user's sessions (every device).
       const v = SESSION_SECRET ? verifySession(parseCookies(req.headers.cookie).session ?? '', SESSION_SECRET) : null;
       if (v)
         await pool.query('UPDATE users SET session_version = session_version + 1 WHERE id = $1 AND session_version = $2', [
@@ -481,10 +481,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const dashPath = (req.url ?? '').split('?')[0];
-    const getOrHead = req.method === 'GET' || req.method === 'HEAD'; // E2E N1: HEAD returned 404
+    const getOrHead = req.method === 'GET' || req.method === 'HEAD'; // HEAD is served like GET, not 404
     if (getOrHead && dashFiles.has(dashPath)) {
       const f = dashFiles.get(dashPath)!;
-      // Fixed file names: no-cache + ETag so a redeploy is picked up at once (E2E L10), 304 otherwise.
+      // Fixed file names: no-cache + ETag so a redeploy is picked up at once, 304 otherwise.
       const h = { 'Content-Type': f.type, 'Cache-Control': 'no-cache', ETag: f.etag };
       if (req.headers['if-none-match'] === f.etag) res.writeHead(304, h).end();
       else res.writeHead(200, { ...h, 'Content-Length': f.buf.length }).end(req.method === 'HEAD' ? undefined : f.buf);
@@ -502,7 +502,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(cfg.port, () => console.log(`gateway on :${cfg.port}`));
 // Node as PID 1 has no default SIGTERM handler, so without this a pod ignores scale-down
-// and keeps answering until SIGKILL at the end of its grace period (E2E M3).
+// and keeps answering until SIGKILL at the end of its grace period.
 process.on('SIGTERM', () => {
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();

@@ -82,10 +82,10 @@ export class UpstreamPool {
       } else {
         st.failures += 1;
         // Back off only once Unreachable: the 2 failures that confirm an outage run on
-        // consecutive ticks (~10s, D24). Backing off after the 1st skipped ticks (E2E M3).
+        // consecutive ticks (~10s, D24). Backing off after the 1st skipped ticks.
         if (st.failures >= 2) {
           st.status = 'Unreachable';
-          // capped backoff while down: 5s, 10s, 15s max, so recovery shows within ~15-20s (E2E N3)
+          // capped backoff while down: 5s, 10s, 15s max, so recovery shows within ~15-20s
           st.skipUntil = now + Math.min(15000, 5000 * 2 ** (st.failures - 2));
         }
       }
@@ -104,7 +104,7 @@ export class UpstreamPool {
     const t = setTimeout(() => ctl.abort(), this.healthTimeoutMs);
     try {
       // The SDK transport fetches with its own AbortController and ignores requestInit.signal;
-      // only the per-request signal is honored (E2E M3: probes ran ~13s, not 2s).
+      // only the per-request signal is honored (otherwise probes ran ~13s, not 2s).
       const transport = new StreamableHTTPClientTransport(new URL(st.url), {
         requestInit: { headers: this.authHeaders(st) },
       });

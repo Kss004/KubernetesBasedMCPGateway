@@ -1,4 +1,4 @@
-// AES-256-GCM with Node crypto (no crypto library, ponytail rule).
+// AES-256-GCM with Node crypto (no third-party crypto library).
 // Blob format: base64(iv 12B || ciphertext || tag 16B). Key never leaves env.
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 

@@ -1,5 +1,5 @@
 // HTTP status and message for a caught error. A ZodError has no status and its message is a
-// JSON dump of issues; it is bad input, so 400 with a short message (E2E round 5 bug 2).
+// JSON dump of issues; it is bad input, so 400 with a short message.
 import { z } from 'zod';
 
 export const errStatus = (e: unknown): number =>
