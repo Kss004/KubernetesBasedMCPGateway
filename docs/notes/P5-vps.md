@@ -186,3 +186,33 @@ smoke 13/13, e2e 5/5 (product 16, order 17), `test-netpol.sh` ENFORCED, all pods
   uppercase labels, italic teal heading accents. System fonts only (CSP `default-src 'self'`).
 - Deployed with `helm upgrade gateway ... --rollback-on-failure`; smoke 13/13, all pods restarts 0;
   Servers, Team & Keys, Audit and Chat checked in Chrome.
+
+## Restyle round 2 (gateway 0.4.16, 2026-10-21, not yet deployed)
+
+Closes the gaps left by 0.4.15 against urumi.ai (read from the fully rendered site):
+- **Fonts self-hosted.** 0.4.15 named Switzer but shipped no file, so browsers used system fonts.
+  JetBrains Mono comes from npm (OFL). Switzer is fetched from Fontshare at build time
+  (`make fonts`, run by `make images`) into the gitignored `apps/dashboard/public/fonts/`: its
+  licence allows self-hosting but not redistribution, and the repo is public. The gateway now
+  serves `dist/fonts/*.woff2` as exact paths listed once at boot (`apps/gateway/src/dashboard.ts`,
+  `test/dashboard.test.ts`); Vite no longer inlines assets as `data:` URLs (the CSP blocks them).
+  CSP is unchanged.
+- **Motion:** pages fade and rise 16px on entry (0.5s, staggered), header slides in, typing
+  dots while the agent works, pulsing live dots; all off under `prefers-reduced-motion`.
+- **Chat:** ink user bubbles, tinted agent bubbles, tool calls as cards (dark mono server tag,
+  teal edge, red on failure), three quick-start prompts, a "Working as <user> · <role>" line.
+- **Servers:** a mono "harbor · mcp" card with a live count, one row per server with status on
+  the right and tools as chips.
+- **Page heads:** "01 / SERVERS" eyebrow, large heading with an italic teal accent, short lead.
+  The new-key reveal is a dark ink panel.
+
+Verified locally only (Docker Desktop was not running): `npm test -w apps/gateway` 59/59; the
+built dashboard served through `loadDashFiles` with the gateway's CSP and a mock API: Switzer
+roman + italic and JetBrains Mono load, no CSP errors, all four tabs and a streamed chat render,
+no horizontal scroll at 375px. Not yet run: `make images`, `helm upgrade` and smoke on the VPS.
+
+Deploy on the VPS: `git pull && make images` (fetches Switzer), retag and import the gateway image
+as in the install sequence, then the README upgrade command:
+`helm upgrade gateway ./charts/gateway -n urumi-gateway -f charts/gateway/values-prod.yaml
+--set appHost=app.169-58-78-14.sslip.io --set ingress.tlsSecretName=app-tls --set gatewayTag=0.4.16
+--rollback-on-failure --timeout 3m`, then `make smoke` with `PROTO=https` (now 14 checks: one more for a served font).

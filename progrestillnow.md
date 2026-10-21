@@ -440,6 +440,8 @@ Pending human decisions:
     All are fixed; see `docs/notes/P4-k3d.md`.
 20. **Node as PID 1 ignores SIGTERM (2026-10-19, E2E M3, `bdce674`).** A scaled-down pod kept serving for its whole grace period; the gateway and mcp-mini now handle SIGTERM.
 
+21. **Dashboard fonts under the CSP (2026-10-21, gateway 0.4.16, local preview).** Self-hosted Switzer (fetched, not committed: FFL) and JetBrains Mono (npm, OFL) load with `default-src 'self'`; Vite must not inline fonts as `data:` URLs (`assetsInlineLimit: 0`). See `docs/notes/P5-vps.md`, "Restyle round 2".
+
 **Not yet verified (check before relying on them)**
 
 - Ollama's OpenAI-compatible endpoint returns tool calls in the same shape (not tested; Ollama is only a documented option).
