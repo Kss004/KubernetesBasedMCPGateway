@@ -1,0 +1,24 @@
+{{- if .Values.ingress.acmeHttp01 }}
+# Lets the ingress controller reach cert-manager's HTTP-01 solver pods, which
+# cert-manager starts in this namespace at issue and renewal time. Without it,
+# default-deny-ingress blocks the challenge and the certificate expires.
+# Label and port from cert-manager v1.21.2 (pkg/issuer/acme/http/pod.go).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: acme-solver-ingress
+spec:
+  podSelector:
+    matchLabels: { acme.cert-manager.io/http01-solver: "true" }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.ingress.controllerNamespace }}
+          {{- with .Values.ingress.controllerPodLabels }}
+          podSelector:
+            matchLabels: {{- toYaml . | nindent 14 }}
+          {{- end }}
+      ports: [{ port: 8089 }]
+{{- end }}

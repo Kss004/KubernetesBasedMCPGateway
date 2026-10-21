@@ -8,6 +8,9 @@ ingress:
   controllerPodLabels: {}
   # Name of a kubernetes.io/tls Secret in this namespace; empty = no tls block.
   tlsSecretName: ""
+  # true when cert-manager issues tlsSecretName via ACME HTTP-01 in this namespace:
+  # admits the controller to the solver pods (port 8089) past default-deny.
+  acmeHttp01: false
   # Controller-specific; these keep /mcp and chat SSE streaming on ingress-nginx (T1.2).
   annotations:
     nginx.ingress.kubernetes.io/proxy-buffering: "off"

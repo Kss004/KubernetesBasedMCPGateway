@@ -12,6 +12,8 @@ ingress:
   # here, or leave empty when TLS terminates in front of the cluster.
   # Not exercised on k3d (no public domain).
   tlsSecretName: ""
+  # cert-manager HTTP-01 solver pods need Traefik to reach them (issue and renewal).
+  acmeHttp01: true
   # Drop the nginx-only annotations (Helm merges maps, so {} would keep them;
   # null deletes a key). Traefik streams responses without buffering by default.
   annotations:
