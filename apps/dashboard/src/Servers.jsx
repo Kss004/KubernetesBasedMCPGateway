@@ -154,7 +154,120 @@ export default function Servers({ setStatus }) {
           Add
         </button>
       </form>
+
+      <Hosted setStatus={setStatus} onChange={load} />
     </section>
+  );
+}
+
+// Hosted MCP servers: deployed into the cluster from a container image by the provisioner.
+const HOSTED_EMPTY = { slug: '', image: '', port: '3000', path: '/mcp', env: '' };
+
+function Hosted({ setStatus, onChange }) {
+  const [data, setData] = useState(null);
+  const [f, setF] = useState(HOSTED_EMPTY);
+  const load = useCallback(async () => setData(await api('/api/hosted')), []);
+  useEffect(() => {
+    guard(setStatus, load)();
+    const t = setInterval(() => load().catch(() => {}), 5000);
+    return () => clearInterval(t);
+  }, [load, setStatus]);
+
+  const add = guard(setStatus, async (e) => {
+    e.preventDefault();
+    // KEY=value per line; values are stored encrypted and only ever reach the server's Secret.
+    const env = Object.fromEntries(
+      f.env
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
+    );
+    await api('/api/hosted', { method: 'POST', body: { slug: f.slug, image: f.image, port: Number(f.port), path: f.path, env } });
+    setF(HOSTED_EMPTY);
+    setStatus(`Deploying ${f.slug}. It appears above once its pod is ready.`);
+    await load();
+  });
+  const remove = (h) =>
+    guard(setStatus, async () => {
+      if (!window.confirm(`Remove hosted server "${h.slug}"? Its pod and tools are removed.`)) return;
+      await api(`/api/hosted/${h.id}`, { method: 'DELETE' });
+      await load();
+      await onChange();
+    });
+
+  if (!data?.enabled) return null;
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return (
+    <>
+      <h3>Deploy a server from an image</h3>
+      <p className="muted small">
+        The platform runs it in <span className="mono">urumi-hosted</span>: no Kubernetes token, non-root, read-only
+        filesystem, resource limits, and only the gateway may connect. Allowed images:{' '}
+        <span className="mono">{data.limits.imagePrefixes.join(', ')}</span>
+      </p>
+      <form className="row" onSubmit={add}>
+        <label>
+          Slug
+          <input value={f.slug} onChange={set('slug')} placeholder="hosted-demo" pattern="[a-z][a-z0-9\-]{1,30}[a-z0-9]" required />
+        </label>
+        <label className="grow">
+          Image
+          <input value={f.image} onChange={set('image')} placeholder={`${data.limits.imagePrefixes[0] ?? ''}…:tag`} required />
+        </label>
+        <label>
+          Port
+          <input value={f.port} onChange={set('port')} type="number" min="1024" max="65535" required />
+        </label>
+        <label>
+          Path
+          <input value={f.path} onChange={set('path')} required />
+        </label>
+        <label className="grow">
+          Env (KEY=value per line, optional)
+          <textarea value={f.env} onChange={set('env')} rows={1} autoComplete="off" />
+        </label>
+        <button type="submit" className="primary">
+          Deploy
+        </button>
+      </form>
+      {data.hosted.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Slug</th>
+              <th>Image</th>
+              <th>Status</th>
+              <th>Env</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {data.hosted.map((h) => (
+              <tr key={h.id}>
+                <td className="mono">{h.slug}</td>
+                <td className="mono">{h.image}</td>
+                <td>
+                  <span className={`pill store-${h.status === 'Deploying' ? 'Provisioning' : h.status === 'Removing' ? 'Deleting' : h.status}`}>
+                    {h.status}
+                  </span>
+                  {h.step && h.status !== 'Ready' && <span className="muted small"> · {h.step}</span>}
+                  {h.reason && <div className="store-reason">{h.reason}</div>}
+                </td>
+                <td className="mono">{h.env_names.join(', ') || '—'}</td>
+                <td className="actions">
+                  {h.status !== 'Removing' && (
+                    <button className="danger" onClick={remove(h)}>
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }
 

@@ -315,7 +315,9 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 
 | Handling many tools: above a threshold (Helm `chat.toolSearchThreshold`, prod 20) the chat model gets `search_tools` + `call_tool` instead of every schema; `call_tool` goes through the same role check, schema check and audit row as a direct call, and search only ever returns tools the user may call | `apps/gateway/src/toolsearch.ts`, `chat.ts` (`dispatch`) |
 
-Not attempted: OAuth on the gateway and hosted MCP servers.
+| Hosted MCP servers: an admin deploys a server from a container image (Servers page, "Deploy a server from an image"); the provisioner runs it in `urumi-hosted` with its own Secret (env values encrypted at rest), limits, probes, a NetworkPolicy admitting only gateway pods, no Kubernetes token, non-root and a read-only filesystem, registers it, and removes all of it again. Only allow-listed image prefixes (`provisioner.hosted.imagePrefixes`) | `apps/gateway/src/hosted.ts`, `apps/provisioner/src/hosted.ts`, `charts/gateway/templates/provisioner.yaml` |
+
+Not attempted: OAuth on the gateway.
 
 ## 11. Bonus: multi-store provisioning
 

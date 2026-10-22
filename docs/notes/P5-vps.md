@@ -377,3 +377,14 @@ came in today?" ran `search_tools` (5 found) then `woo__list_orders`, both answe
 audited under the user. Threshold restored to 20. Unit tests: ranking, meta-tools only above the
 threshold, `call_tool` audited as the real tool, members never find or call denied tools,
 arguments still validated. Gateway unit tests 93; smoke 14/14, e2e 5/5.
+
+## Stand-out: hosted MCP servers (2026-10-22, gateway 0.4.24, provisioner 0.1.1)
+
+An admin adds a server by image; the provisioner deploys it in `urumi-hosted`. Checked live through
+the admin API: an image from `docker.io/evil/...` gave `400 image must come from an allowed
+registry`; `hosted-demo` from `ghcr.io/kss004/kubernetesbasedmcpgateway/mock-mcp:0.1.1` with one env
+variable went Deploying -> Ready in 16 s (Secret, Deployment, Service, NetworkPolicy), registered and
+Connected with 4 tools; `hosted-demo__convert_currency` called through `/mcp` returned 9.2; a pod
+in `urumi-upstreams` was refused; the hosted pod has no ServiceAccount token and a read-only root
+filesystem. Remove: registration and all four objects gone. Unit tests: provisioner 14, gateway
+93 (+14 with Postgres); smoke 14/14, e2e 5/5.

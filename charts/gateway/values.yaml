@@ -28,7 +28,7 @@ images:
   postgres: "postgres:17"
   gateway: "gateway"
   provisioner: "provisioner"
-gatewayTag: "0.4.23"
+gatewayTag: "0.4.24"
 
 storage:
   postgres: 5Gi
@@ -83,7 +83,7 @@ llm:
 # urumi-store-<name> namespaces and registers each one's MCP server (provisioner.yaml).
 provisioner:
   enabled: false
-  tag: "0.1.0"
+  tag: "0.1.1"
   storeDomain: "" # stores get shop-<name>.<storeDomain>
   storeScheme: http
   tlsIssuer: "" # a ClusterIssuer gives each store a Certificate; empty = no TLS
@@ -91,3 +91,8 @@ provisioner:
   maxPerUser: 2
   maxTotal: 4
   timeoutMin: 10
+  # Hosted MCP servers: an admin adds a server by image; deployed into urumi-hosted.
+  hosted:
+    max: 5
+    # Only images under these prefixes may be deployed (a supply-chain guard).
+    imagePrefixes: ["ghcr.io/kss004/"]

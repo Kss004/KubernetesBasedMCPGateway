@@ -30,6 +30,7 @@ import {
 } from './session.js';
 import { LoginLimiter, RateLimiter, pruneLimits } from './ratelimit.js';
 import { createStore, deleteStore, listStores } from './stores.js';
+import { createHosted, listHosted, removeHosted } from './hosted.js';
 import { hashKey, identifyKey } from './keys.js';
 import { logCall } from './audit.js';
 
@@ -42,6 +43,12 @@ const STORES_ENABLED = process.env.STORES_ENABLED === 'true';
 const STORE_LIMITS = {
   perUser: Number(process.env.STORES_PER_USER ?? 2),
   total: Number(process.env.STORES_MAX ?? 4),
+  timeoutMin: Number(process.env.STORES_TIMEOUT_MIN ?? 10),
+};
+// Hosted MCP servers (by image): also worked by the provisioner, so on with it.
+const HOSTED_LIMITS = {
+  max: Number(process.env.HOSTED_MAX ?? 5),
+  imagePrefixes: (process.env.HOSTED_IMAGE_PREFIXES ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   timeoutMin: Number(process.env.STORES_TIMEOUT_MIN ?? 10),
 };
 // Secure only when served over https (values-prod), or http login would break.
@@ -491,6 +498,35 @@ const server = http.createServer(async (req, res) => {
       const u = await sessionUser(req);
       if (!u) send(res, 401, { error: 'unauthorized' });
       else send(res, 200, u);
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/hosted')) {
+      // Hosted MCP servers: admin only, like every other server change.
+      if (!(await requireAdmin(req, res))) return;
+      try {
+        if (req.method === 'GET' && req.url === '/api/hosted') {
+          send(res, 200, { enabled: STORES_ENABLED, limits: HOSTED_LIMITS, hosted: await listHosted(pool) });
+          return;
+        }
+        if (!STORES_ENABLED) {
+          send(res, 503, { error: 'hosted servers need the provisioner, which is not enabled on this deployment' });
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/hosted') {
+          const u = await sessionUser(req);
+          send(res, 201, await createHosted(pool, cfg.credKey, u?.id ?? null, await readJson(req), HOSTED_LIMITS));
+          return;
+        }
+        const m = /^\/api\/hosted\/([0-9a-f-]{36})$/.exec(req.url ?? '');
+        if (req.method === 'DELETE' && m) {
+          if (await removeHosted(pool, m[1])) send(res, 202, { status: 'Removing' });
+          else send(res, 404, { error: 'not found' });
+          return;
+        }
+        send(res, 405, { error: 'method not allowed' });
+      } catch (e) {
+        send(res, errStatus(e), { error: errMessage(e) });
+      }
       return;
     }
     if ((req.url ?? '').startsWith('/api/stores')) {

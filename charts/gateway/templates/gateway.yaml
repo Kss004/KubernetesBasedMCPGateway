@@ -74,6 +74,10 @@ spec:
               value: {{ .Values.provisioner.maxTotal | quote }}
             - name: STORES_TIMEOUT_MIN
               value: {{ .Values.provisioner.timeoutMin | quote }}
+            - name: HOSTED_MAX
+              value: {{ .Values.provisioner.hosted.max | quote }}
+            - name: HOSTED_IMAGE_PREFIXES
+              value: {{ join "," .Values.provisioner.hosted.imagePrefixes | quote }}
             # P6 chat LLM (D10): base URL + pinned model are values (not secrets);
             # the key arrives out-of-band via `make secrets` (optional so the
             # gateway still boots without it; /api/chat then answers 503).

@@ -125,6 +125,32 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // Hosted MCP servers: added by container image, deployed by the provisioner (hosted.ts).
+    version: 9,
+    sql: `
+      CREATE TABLE IF NOT EXISTS hosted_servers (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        slug text NOT NULL UNIQUE,
+        image text NOT NULL,
+        port int NOT NULL,
+        path text NOT NULL,
+        env_enc text NOT NULL,
+        env_names text[] NOT NULL DEFAULT '{}',
+        status text NOT NULL CHECK (status IN ('Deploying','Ready','Failed','Removing')),
+        step text,
+        reason text,
+        server_id uuid REFERENCES servers(id) ON DELETE SET NULL,
+        created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+        attempts int NOT NULL DEFAULT 0,
+        deadline timestamptz NOT NULL,
+        lease_owner text,
+        lease_until timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 export function createPool(pg: {

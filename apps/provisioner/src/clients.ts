@@ -13,6 +13,18 @@ export interface Kube {
   /** Every Deployment and StatefulSet in `ns` has all its replicas ready. */
   workloadsReady(ns: string): Promise<{ ready: boolean; detail: string }>;
   secretValue(ns: string, name: string, key: string): Promise<string | null>;
+  /** Server-side apply: creates or updates the object (idempotent). */
+  apply(obj: { apiVersion: string; kind: string; metadata: { name: string; namespace: string } }): Promise<void>;
+  /** Deletes one object by API path; a missing object is fine. */
+  remove(path: string): Promise<void>;
+  deploymentReady(ns: string, name: string): Promise<{ ready: boolean; detail: string }>;
+}
+
+/** REST path of a namespaced object (only the kinds the provisioner manages for hosted servers). */
+export function objectPath(apiVersion: string, kind: string, ns: string, name: string): string {
+  const plural: Record<string, string> = { Deployment: 'deployments', Service: 'services', Secret: 'secrets', NetworkPolicy: 'networkpolicies' };
+  const base = apiVersion.includes('/') ? `/apis/${apiVersion}` : `/api/${apiVersion}`;
+  return `${base}/namespaces/${ns}/${plural[kind]}/${name}`;
 }
 
 export type ReleaseState = 'none' | 'deployed' | 'failed' | 'pending';
@@ -24,8 +36,8 @@ export interface Helm {
 }
 
 export interface Gateway {
-  /** Creates or updates the server row; returns its id. */
-  upsertServer(slug: string, url: string, token: string): Promise<string>;
+  /** Creates or updates the server row; returns its id. A null token registers it without auth. */
+  upsertServer(slug: string, url: string, token: string | null): Promise<string>;
   deleteServer(slug: string): Promise<void>;
 }
 
@@ -39,12 +51,12 @@ export class KubeApi implements Kube {
     private sa: { name: string; namespace: string },
   ) {}
 
-  private async call(method: string, path: string, body?: unknown): Promise<{ status: number; json: any }> {
+  private async call(method: string, path: string, body?: unknown, contentType = 'application/json'): Promise<{ status: number; json: any }> {
     const token = (await readFile(`${SA_DIR}/token`, 'utf8')).trim(); // re-read: tokens rotate
     // NODE_EXTRA_CA_CERTS points at the ServiceAccount CA, so fetch trusts the API server.
     const res = await fetch(`https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': contentType, Accept: 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
@@ -107,6 +119,32 @@ export class KubeApi implements Kube {
     const total = (d.items?.length ?? 0) + (s.items?.length ?? 0);
     if (total === 0) return { ready: false, detail: 'no workloads yet' };
     return { ready: waiting.length === 0, detail: waiting.length ? `waiting for ${waiting.join(', ')}` : 'all ready' };
+  }
+
+  async apply(obj: { apiVersion: string; kind: string; metadata: { name: string; namespace: string } }): Promise<void> {
+    const path = `${objectPath(obj.apiVersion, obj.kind, obj.metadata.namespace, obj.metadata.name)}?fieldManager=harbor-provisioner&force=true`;
+    const r = await this.call('PATCH', path, obj, 'application/apply-patch+yaml'); // JSON is valid YAML
+    if (r.status !== 200 && r.status !== 201) throw new Error(`kubernetes apply ${obj.kind}/${obj.metadata.name}: ${r.status} ${r.json?.message ?? ''}`.trim());
+  }
+
+  async remove(path: string): Promise<void> {
+    await this.must('DELETE', path, undefined, [200, 202, 404]);
+  }
+
+  async deploymentReady(ns: string, name: string): Promise<{ ready: boolean; detail: string }> {
+    const r = await this.call('GET', `/apis/apps/v1/namespaces/${ns}/deployments/${name}`);
+    if (r.status === 404) return { ready: false, detail: 'deployment not found' };
+    if (r.status !== 200) throw new Error(`kubernetes GET deployment ${ns}/${name}: ${r.status}`);
+    const ok = (r.json.status?.availableReplicas ?? 0) >= (r.json.spec?.replicas ?? 1);
+    // Surface why a pod is not starting (bad image, crash) instead of just "waiting".
+    const pods = await this.call('GET', `/api/v1/namespaces/${ns}/pods?labelSelector=${encodeURIComponent(`hosted=${name}`)}`);
+    let detail = ok ? 'ready' : 'starting';
+    for (const p of pods.json?.items ?? [])
+      for (const c of p.status?.containerStatuses ?? []) {
+        const w = c.state?.waiting;
+        if (w?.reason && w.reason !== 'ContainerCreating') detail = `${w.reason}${w.message ? `: ${String(w.message).slice(0, 160)}` : ''}`;
+      }
+    return { ready: ok, detail };
   }
 
   async secretValue(ns: string, name: string, key: string): Promise<string | null> {
@@ -192,11 +230,12 @@ export class GatewayApi implements Gateway {
     return (r.json.servers as Array<{ id: string; slug: string }>).find((s) => s.slug === slug);
   }
 
-  async upsertServer(slug: string, url: string, token: string): Promise<string> {
+  async upsertServer(slug: string, url: string, token: string | null): Promise<string> {
     const existing = await this.find(slug);
+    const auth = token ? { auth_type: 'bearer', secret: token } : { auth_type: 'none' };
     const r = existing
-      ? await this.call('PATCH', `/api/servers/${existing.id}`, { url, auth_type: 'bearer', secret: token, enabled: true })
-      : await this.call('POST', '/api/servers', { slug, url, auth_type: 'bearer', secret: token });
+      ? await this.call('PATCH', `/api/servers/${existing.id}`, { url, ...auth, ...(token ? {} : { secret: null }), enabled: true })
+      : await this.call('POST', '/api/servers', { slug, url, ...auth });
     if (r.status !== 200 && r.status !== 201) throw new Error(`gateway register ${slug}: ${r.status} ${r.json?.error ?? ''}`.trim());
     return r.json.id as string;
   }

@@ -96,9 +96,9 @@ spec:
       expression: "request.userInfo.username == 'system:serviceaccount:{{ .Release.Namespace }}:{{ $sa }}'"
   validations:
     - expression: >-
-        request.namespace.startsWith('urumi-store-') ||
+        request.namespace.startsWith('urumi-store-') || request.namespace == 'urumi-hosted' ||
         (request.resource.resource == 'namespaces' && request.name.startsWith('urumi-store-'))
-      message: "the store provisioner may only write inside urumi-store-<name> namespaces"
+      message: "the provisioner may only write inside urumi-store-<name> namespaces and urumi-hosted"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
@@ -164,6 +164,10 @@ spec:
               value: {{ .Values.provisioner.storeValues | quote }}
             - name: TIMEOUT_MIN
               value: {{ .Values.provisioner.timeoutMin | quote }}
+            # Decrypts the env values of hosted servers (stored encrypted, like upstream credentials).
+            - name: CRED_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-cred, key: key }
             # fetch trusts the API server through the ServiceAccount CA.
             - name: NODE_EXTRA_CA_CERTS
               value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -186,4 +190,79 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+---
+# Hosted MCP servers (added by image): their own namespace, default-deny ingress, a quota, and
+# per-container limits. The provisioner manages objects here through this fixed Role only.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: urumi-hosted
+  labels: { app.kubernetes.io/managed-by: Helm }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: urumi-hosted
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: hosted-quota
+  namespace: urumi-hosted
+spec:
+  hard:
+    pods: {{ .Values.provisioner.hosted.max | quote }}
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "3"
+    limits.memory: 2Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: hosted-limits
+  namespace: urumi-hosted
+spec:
+  limits:
+    - type: Container
+      default: { cpu: 500m, memory: 256Mi }
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+      max: { cpu: "1", memory: 512Mi }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hosted-manager
+  namespace: urumi-hosted
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "services"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: harbor-provisioner
+  namespace: urumi-hosted
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: hosted-manager
 {{- end }}

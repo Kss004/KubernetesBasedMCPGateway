@@ -176,6 +176,17 @@ step for write tools in chat. The audit log records every call.
 - **Users.** A member manages only their own stores; quotas cap stores per user and per platform,
   and each namespace has a ResourceQuota and LimitRange, so one store cannot starve the node.
 
+### Hosted MCP servers (deployed from an image)
+
+Running an admin-chosen image is running someone else's code in the cluster, so it is fenced in:
+admins only; images only from allow-listed prefixes (`provisioner.hosted.imagePrefixes`, a
+supply-chain guard, not a scanner); its own namespace `urumi-hosted` with a quota; the pod gets no
+Kubernetes token, runs non-root with a read-only root filesystem, no capabilities and resource
+limits; its NetworkPolicy admits only gateway pods. Env values are encrypted at rest and reach only
+the pod's Secret; the API returns only their names. Checked live: another pod is refused, the pod
+has no token and cannot write its filesystem. Not prevented: outbound traffic from the pod
+(egress is open, D25), so a malicious image could still call out.
+
 ## Known gaps (stated, not hidden)
 
 - **No egress default-deny (D25).** The chat agent needs LLM, DNS, Postgres and upstream

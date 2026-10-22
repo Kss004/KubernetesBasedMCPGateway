@@ -11,6 +11,7 @@ import os from 'node:os';
 import pg from 'pg';
 import { GatewayApi, HelmCli, KubeApi } from './clients.js';
 import { provision, teardown, type Deps, type StoreRow } from './reconcile.js';
+import { deployHosted, removeHostedServer, type HostedDeps, type HostedRow } from './hosted.js';
 
 const env = (k: string, d?: string): string => {
   const v = process.env[k] ?? d;
@@ -60,61 +61,97 @@ const deps: Deps = {
   },
 };
 
+const hostedDeps: HostedDeps = {
+  kube: deps.kube,
+  gateway: deps.gateway,
+  credKey: Buffer.from(env('CRED_KEY'), 'utf8'), // same 32-character key as the gateway (config.ts)
+  gatewayNamespace: env('SA_NAMESPACE'),
+  pollMs: 5000,
+  timeoutMin: deps.cfg.timeoutMin,
+  db: {
+    async update(id, expect, fields) {
+      const keys = Object.keys(fields);
+      const sets = keys.map((k, i) => `${k} = $${i + 3}`).join(', ');
+      const { rowCount } = await pool.query(
+        `UPDATE hosted_servers SET ${sets}${sets ? ', ' : ''}updated_at = now() WHERE id = $1 AND status = $2`,
+        [id, expect, ...keys.map((k) => fields[k])],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+    async remove(id) {
+      await pool.query(`DELETE FROM hosted_servers WHERE id = $1 AND status = 'Removing'`, [id]);
+    },
+  },
+};
+
+// Two kinds of work, one lease mechanism. `table` and the column lists are constants, never input.
+const KINDS = {
+  stores: { active: ['Provisioning', 'Deleting'], cols: 'id, name, namespace, status, attempts, deadline' },
+  hosted_servers: { active: ['Deploying', 'Removing'], cols: 'id, slug, image, port, path, env_enc, status, deadline' },
+} as const;
+type Table = keyof typeof KINDS;
+
 const running = new Set<string>();
 let lastTick = Date.now();
 
-/** Claims up to `n` stores that need work and are not leased by a live provisioner. */
-async function claim(n: number): Promise<StoreRow[]> {
+/** Claims up to `n` rows that need work and are not leased by a live provisioner. */
+async function claim(table: Table, n: number): Promise<Array<Record<string, any>>> {
   if (n <= 0) return [];
+  const k = KINDS[table];
   const { rows } = await pool.query(
-    `UPDATE stores SET lease_owner = $1, lease_until = now() + make_interval(secs => $2)
+    `UPDATE ${table} SET lease_owner = $1, lease_until = now() + make_interval(secs => $2)
      WHERE id IN (
-       SELECT id FROM stores
-       WHERE status IN ('Provisioning', 'Deleting') AND (lease_until IS NULL OR lease_until < now())
+       SELECT id FROM ${table}
+       WHERE status = ANY($5::text[]) AND (lease_until IS NULL OR lease_until < now())
          AND NOT (id = ANY($4::uuid[]))
        ORDER BY created_at
        FOR UPDATE SKIP LOCKED
        LIMIT $3)
-     RETURNING id, name, namespace, status, attempts, deadline`,
-    [POD, LEASE_SEC, n, [...running]],
+     RETURNING ${k.cols}`,
+    [POD, LEASE_SEC, n, [...running], k.active],
   );
-  return rows as StoreRow[];
+  return rows;
 }
 
-async function work(s: StoreRow): Promise<void> {
-  running.add(s.id);
+async function work(table: Table, row: Record<string, any>): Promise<void> {
+  running.add(row.id);
+  const label = row.name ?? row.slug;
   const renew = setInterval(
     () =>
       void pool
-        .query(`UPDATE stores SET lease_until = now() + make_interval(secs => $3) WHERE id = $1 AND lease_owner = $2`, [s.id, POD, LEASE_SEC])
+        .query(`UPDATE ${table} SET lease_until = now() + make_interval(secs => $3) WHERE id = $1 AND lease_owner = $2`, [row.id, POD, LEASE_SEC])
         .catch(() => {}),
     LEASE_SEC * 333, // a third of the lease
   );
   try {
-    console.log(`${s.status === 'Deleting' ? 'teardown' : 'provision'} ${s.name}`);
-    if (s.status === 'Deleting') await teardown(s, deps);
-    else await provision(s, deps);
-    await pool.query(`UPDATE stores SET lease_owner = NULL, lease_until = NULL WHERE id = $1 AND lease_owner = $2`, [s.id, POD]);
+    console.log(`${row.status} ${table === 'stores' ? 'store' : 'hosted server'} ${label}`);
+    if (table === 'stores') {
+      if (row.status === 'Deleting') await teardown(row as StoreRow, deps);
+      else await provision(row as StoreRow, deps);
+    } else if (row.status === 'Removing') await removeHostedServer(row as HostedRow, hostedDeps);
+    else await deployHosted(row as HostedRow, hostedDeps);
+    await pool.query(`UPDATE ${table} SET lease_owner = NULL, lease_until = NULL WHERE id = $1 AND lease_owner = $2`, [row.id, POD]);
   } catch (e) {
     const msg = (e as Error).message;
-    console.error(`${s.name}: ${msg} (will retry)`);
+    console.error(`${label}: ${msg} (will retry)`);
     // Keep the reason visible and retry after a short back-off (the lease runs out in 15s).
     await pool
-      .query(`UPDATE stores SET reason = coalesce(reason, $3), lease_until = now() + interval '15 seconds' WHERE id = $1 AND lease_owner = $2`, [
-        s.id,
+      .query(`UPDATE ${table} SET reason = coalesce(reason, $3), lease_until = now() + interval '15 seconds' WHERE id = $1 AND lease_owner = $2`, [
+        row.id,
         POD,
         msg.slice(0, 300),
       ])
       .catch(() => {});
   } finally {
     clearInterval(renew);
-    running.delete(s.id);
+    running.delete(row.id);
   }
 }
 
 async function tick(): Promise<void> {
   lastTick = Date.now();
-  for (const s of await claim(PARALLEL - running.size)) void work(s);
+  for (const table of Object.keys(KINDS) as Table[])
+    for (const row of await claim(table, PARALLEL - running.size)) void work(table, row);
 }
 
 // Liveness: the loop must keep ticking (a stuck event loop gets the pod restarted).
@@ -128,10 +165,10 @@ http
 // The stores table is created by the gateway's migrations; wait for it on a fresh install.
 for (;;) {
   try {
-    await pool.query('SELECT 1 FROM stores LIMIT 1');
+    await pool.query('SELECT 1 FROM stores, hosted_servers LIMIT 1');
     break;
   } catch (e) {
-    console.error(`waiting for the stores table: ${(e as Error).message}`);
+    console.error(`waiting for the gateway's tables: ${(e as Error).message}`);
     await new Promise((r) => setTimeout(r, 5000));
   }
 }
