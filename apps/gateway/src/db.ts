@@ -78,6 +78,11 @@ const MIGRATIONS: Migration[] = [
     version: 5,
     sql: `ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version int NOT NULL DEFAULT 0;`,
   },
+  {
+    // Observability: per-server metrics scan the audit table by time window.
+    version: 6,
+    sql: `CREATE INDEX IF NOT EXISTS audit_created_idx ON audit(created_at DESC);`,
+  },
 ];
 
 export function createPool(pg: {

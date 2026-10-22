@@ -27,7 +27,7 @@ imagePullSecrets: []
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.4.19"
+gatewayTag: "0.4.20"
 
 storage:
   postgres: 5Gi

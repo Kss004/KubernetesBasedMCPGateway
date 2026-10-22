@@ -44,7 +44,7 @@ describe('UpstreamPool.refreshNow', () => {
       query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }),
     };
     const pool = new UpstreamPool(pg as never, Buffer.alloc(32));
-    (pool as unknown as { probe: () => Promise<boolean> }).probe = async () => up;
+    (pool as unknown as { probe: () => Promise<string | null> }).probe = async () => (up ? null : 'connection refused');
     await pool.refreshNow();
     await pool.refreshNow(); // two failures: Unreachable, backed off
     assert.equal(pool.getStates()[0].status, 'Unreachable');
@@ -64,7 +64,7 @@ describe('UpstreamPool outage detection', () => {
     let up = true;
     const pg = { query: async (sql: string) => ({ rows: sql.startsWith('SELECT server_id') ? [] : [row] }) };
     const pool = new UpstreamPool(pg as never, Buffer.alloc(32));
-    (pool as unknown as { probe: () => Promise<boolean> }).probe = async () => up;
+    (pool as unknown as { probe: () => Promise<string | null> }).probe = async () => (up ? null : 'connection refused');
     await pool.refreshNow();
     assert.equal(pool.getStates()[0].status, 'Connected');
     up = false;

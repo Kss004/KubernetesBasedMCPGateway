@@ -310,3 +310,17 @@ keep the old slug as text). Checked: 4 servers Connected, 14 tools; a member key
 `utils__add(2,3)` and got 5; scaling `upstreams-utils-mcp` to 0 showed `utils` Unreachable while the
 others stayed Connected, and it recovered at 1. smoke 14/14, e2e 5/5. Dated notes above and in
 `P4-k3d.md` / `E2E-*` keep the old name.
+
+## Stand-out: observability (2026-10-22, gateway 0.4.20)
+
+- Per-server metrics from the audit table (no new work on the request path): calls, ok / error /
+  denied, error rate (errors over calls that reached the upstream), p50 / p95 / max latency and
+  error classes. `GET /api/metrics?window=1h|24h|7d` (admin) feeds a stats line per server on the
+  Servers page; `GET /metrics` serves the same as Prometheus gauges plus `harbor_upstream_up`
+  (admin token). Migration 6 indexes `audit(created_at)`.
+- Why a server is down: each health probe failure is turned into a short reason
+  (`describeFailure` in `pool.ts`), shown under an Unreachable server with how long it has been
+  down. Checked live: scaling `upstreams-utils-mcp` to 0 showed
+  `Unreachable | connection refused (nothing listening)`; it recovered at 1.
+- Checked: 7-day metrics (woo 47 calls, 4.3% errors, p50 283 ms, p95 1077 ms), a bad window gives
+  400, `/metrics` without auth gives 401. Unit tests 89; smoke 14/14, e2e 5/5.

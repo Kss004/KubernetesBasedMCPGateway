@@ -4,26 +4,39 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, guard } from './api.js';
 
 const EMPTY = { slug: '', url: '', auth_type: 'none', header_name: '', secret: '' };
+const WINDOWS = ['1h', '24h', '7d'];
+
+const ago = (iso) => {
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  return `${Math.round(s / 3600)}h`;
+};
+const pct = (r) => `${(r * 100).toFixed(r && r < 0.1 ? 1 : 0)}%`;
 
 export default function Servers({ setStatus }) {
   const [servers, setServers] = useState(null); // null = not loaded yet (no empty-state flash)
-  const [health, setHealth] = useState({});
+  const [health, setHealth] = useState({}); // server id -> { status, reason, since }
+  const [metrics, setMetrics] = useState({}); // slug -> per-server metrics
+  const [win, setWin] = useState('24h');
   const [tools, setTools] = useState({});
   const [editing, setEditing] = useState(null); // server id
   const [form, setForm] = useState(EMPTY);
 
   const load = useCallback(async () => {
-    const [{ servers }, { upstreams }, { tools }] = await Promise.all([
+    const [{ servers }, { upstreams }, { tools }, m] = await Promise.all([
       api('/api/servers'),
       api('/api/upstreams'),
       api('/api/tools'),
+      api(`/api/metrics?window=${win}`),
     ]);
     setServers(servers);
-    setHealth(Object.fromEntries(upstreams.map((u) => [u.id, u.status])));
+    setHealth(Object.fromEntries(upstreams.map((u) => [u.id, u])));
+    setMetrics(Object.fromEntries(m.servers.map((x) => [x.server, x])));
     const by = {};
     for (const t of tools) (by[t.serverId] ??= []).push(t);
     setTools(by);
-  }, []);
+  }, [win]);
 
   useEffect(() => {
     guard(setStatus, load)();
@@ -54,7 +67,7 @@ export default function Servers({ setStatus }) {
   });
 
   const list = servers ?? [];
-  const stateOf = (s) => (s.enabled ? health[s.id] ?? 'Unreachable' : 'Disabled');
+  const stateOf = (s) => (s.enabled ? health[s.id]?.status ?? 'Unreachable' : 'Disabled');
   const live = list.filter((s) => stateOf(s) === 'Connected').length;
   const toolCount = Object.values(tools).reduce((n, ts) => n + ts.length, 0);
 
@@ -70,7 +83,16 @@ export default function Servers({ setStatus }) {
             {live}/{list.length} live
           </span>
         </div>
-        <p className="mcp-label">Registered servers</p>
+        <p className="mcp-label">
+          Registered servers
+          <span className="win-pick">
+            {WINDOWS.map((w) => (
+              <button key={w} className={w === win ? 'on' : ''} onClick={() => setWin(w)}>
+                {w}
+              </button>
+            ))}
+          </span>
+        </p>
         {servers === null && <p className="muted">Loading…</p>}
         {servers?.length === 0 && <p className="muted">No servers registered.</p>}
         <ul className="mcp-rows">
@@ -93,6 +115,13 @@ export default function Servers({ setStatus }) {
                   </div>
                   <span className={`state st-${st}`}>{st}</span>
                 </div>
+                {st === 'Unreachable' && health[s.id] && (
+                  <p className="mcp-reason">
+                    {health[s.id].reason ?? 'checking…'}
+                    {health[s.id].since ? ` · for ${ago(health[s.id].since)}` : ''}
+                  </p>
+                )}
+                <Stats m={metrics[s.slug]} win={win} />
                 <div className="mcp-tools">
                   {(tools[s.id] ?? []).map((t) => (
                     <span key={t.name} className={t.changed ? 'chip changed' : 'chip'} title={t.description}>
@@ -126,6 +155,23 @@ export default function Servers({ setStatus }) {
         </button>
       </form>
     </section>
+  );
+}
+
+function Stats({ m, win }) {
+  if (!m) return <p className="mcp-stats muted">no calls in the last {win}</p>;
+  const reached = m.ok + m.errors;
+  const classes = Object.entries(m.error_classes)
+    .map(([k, n]) => `${k} ×${n}`)
+    .join(', ');
+  return (
+    <p className="mcp-stats">
+      <strong>{m.calls}</strong> calls · <span className={m.error_rate > 0.05 ? 'bad' : ''}>{pct(m.error_rate)} errors</span>
+      {m.denied ? ` · ${m.denied} denied` : ''}
+      {reached ? ` · p50 ${m.p50_ms}ms · p95 ${m.p95_ms}ms` : ''}
+      {m.last_call ? ` · last ${ago(m.last_call)} ago` : ''}
+      {classes ? <span className="muted"> · {classes}</span> : null}
+    </p>
   );
 }
 

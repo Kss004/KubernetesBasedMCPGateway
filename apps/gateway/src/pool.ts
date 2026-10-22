@@ -21,6 +21,10 @@ export interface UpstreamState {
   header_name: string | null;
   enabled: boolean;
   status: UpstreamStatus;
+  /** Why the last health probe failed (null while Connected or Disabled). */
+  reason: string | null;
+  /** When the status last changed (ISO), so the dashboard can say "Unreachable for 2m". */
+  since: string;
 }
 
 export class UpstreamPool {
@@ -62,30 +66,31 @@ export class UpstreamPool {
       seen.add(r.id);
       let st = this.states.get(r.id);
       if (!st) {
-        st = { ...r, status: r.enabled ? 'Unreachable' : 'Disabled', failures: 0, skipUntil: 0 };
+        st = { ...r, status: r.enabled ? 'Unreachable' : 'Disabled', reason: null, since: new Date().toISOString(), failures: 0, skipUntil: 0 };
         this.states.set(r.id, st);
       } else {
         Object.assign(st, { slug: r.slug, url: r.url, auth_type: r.auth_type, header_name: r.header_name, enabled: r.enabled });
       }
       if (!r.enabled) {
-        st.status = 'Disabled';
+        setStatus(st, 'Disabled', null);
         st.failures = 0;
         st.skipUntil = 0; // a re-enabled server is probed at once, not after old backoff
         this.secrets.delete(r.id);
         return;
       }
       if (now < st.skipUntil) return; // backed off while down
-      const ok = await this.probe(st);
-      if (ok) {
-        st.status = 'Connected';
+      const failure = await this.probe(st);
+      if (failure === null) {
+        setStatus(st, 'Connected', null);
         st.failures = 0;
         st.skipUntil = 0;
       } else {
         st.failures += 1;
+        st.reason = failure; // shown at once, even before the 2nd failure flips the status
         // Back off only once Unreachable: the 2 failures that confirm an outage run on
         // consecutive ticks (~10s, D24). Backing off after the 1st skipped ticks.
         if (st.failures >= 2) {
-          st.status = 'Unreachable';
+          setStatus(st, 'Unreachable', failure);
           // capped backoff while down: 5s, 10s, 15s max, so recovery shows within ~15-20s
           st.skipUntil = now + Math.min(15000, 5000 * 2 ** (st.failures - 2));
         }
@@ -99,7 +104,8 @@ export class UpstreamPool {
     }
   }
 
-  private async probe(st: UpstreamState): Promise<boolean> {
+  /** null when healthy, otherwise a short reason for the dashboard. */
+  private async probe(st: UpstreamState): Promise<string | null> {
     const client = new Client({ name: 'gateway-health', version: '0.1.0' });
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), this.healthTimeoutMs);
@@ -109,9 +115,9 @@ export class UpstreamPool {
       const transport = upstreamTransport(st.url, this.authHeaders(st));
       await client.connect(transport, { signal: ctl.signal });
       await client.listTools(undefined, { signal: ctl.signal });
-      return true;
-    } catch {
-      return false;
+      return null;
+    } catch (e) {
+      return ctl.signal.aborted ? `no answer within ${this.healthTimeoutMs / 1000}s` : describeFailure(e);
     } finally {
       clearTimeout(t);
       await client.close().catch(() => {}); // aborts the transport's own in-flight fetch
@@ -174,6 +180,32 @@ export class UpstreamPool {
       throw e;
     }
   }
+}
+
+function setStatus(st: UpstreamState, status: UpstreamStatus, reason: string | null): void {
+  if (st.status !== status) st.since = new Date().toISOString();
+  st.status = status;
+  st.reason = reason;
+}
+
+/** A short, human reason for a failed connection. Never includes headers or credentials. */
+export function describeFailure(e: unknown): string {
+  if (e instanceof StreamableHTTPError) {
+    if (e.code === 401 || e.code === 403) return `upstream rejected the credential (HTTP ${e.code})`;
+    if (e.code !== undefined) return `upstream answered HTTP ${e.code}`;
+  }
+  // fetch wraps the network error in .cause (possibly twice); look for a system error code.
+  for (let c: unknown = e, i = 0; c && i < 4; c = (c as { cause?: unknown }).cause, i++) {
+    const code = (c as { code?: unknown }).code;
+    if (code === 'ECONNREFUSED') return 'connection refused (nothing listening)';
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'host name does not resolve';
+    if (code === 'EBLOCKED') return 'blocked by the SSRF guard (private or reserved address)';
+    if (code === 'ECONNRESET') return 'connection reset by the upstream';
+    if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return 'connection timed out';
+    if (typeof code === 'string' && /^(ERR_TLS|CERT_|UNABLE_TO|DEPTH_ZERO|SELF_SIGNED)/.test(code)) return `TLS error (${code})`;
+  }
+  const msg = (e as Error)?.message ?? String(e);
+  return msg.length > 160 ? `${msg.slice(0, 157)}...` : msg;
 }
 
 /** Static upstream credential as request headers; shared by health, listing and calls. */

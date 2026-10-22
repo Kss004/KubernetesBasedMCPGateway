@@ -337,3 +337,11 @@ table.is-loading tbody { opacity: 0.5; transition: opacity 0.15s; }
 .pager-pos { padding: 0 0.5rem; color: var(--muted); font-size: 0.875rem; }
 .pager-pos strong { color: var(--fg); }
 .pager-size { margin-left: auto; flex-direction: row; align-items: center; gap: 0.5rem; }
+
+/* Servers page: per-server metrics and the reason a server is down. */
+.mcp-stats { margin: 0.35rem 0 0 1.6rem; font-size: 0.82rem; color: var(--ink-2); font-family: var(--mono); }
+.mcp-stats .bad { color: var(--bad); font-weight: 600; }
+.mcp-reason { margin: 0.35rem 0 0 1.6rem; font-size: 0.82rem; color: var(--bad); }
+.win-pick { float: right; display: inline-flex; gap: 0.25rem; }
+.win-pick button { padding: 0.1rem 0.5rem; font-size: 0.75rem; }
+.win-pick button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }

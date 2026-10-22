@@ -17,6 +17,7 @@ import { UpstreamPool } from './pool.js';
 import { listUsers, createUser, listKeys, createApiKey, revokeKey } from './keys.js';
 import { listAudit } from './audit.js';
 import { errStatus, errMessage } from './errors.js';
+import { prometheusText, serverMetrics, WINDOWS, type WindowName } from './metrics.js';
 import { loadDashFiles, type DashFile } from './dashboard.js';
 import {
   hashPassword,
@@ -241,6 +242,24 @@ const server = http.createServer(async (req, res) => {
         const status = errStatus(e);
         send(res, status, { error: errMessage(e) });
       }
+      return;
+    }
+    if ((req.url ?? '').split('?')[0] === '/api/metrics' && req.method === 'GET') {
+      // Per-server calls, error rate and latency from the audit table (admin only).
+      if (!(await requireAdmin(req, res))) return;
+      const w = new URL(req.url ?? '/', 'http://x').searchParams.get('window') ?? '24h';
+      if (!(w in WINDOWS)) {
+        send(res, 400, { error: 'window must be 1h, 24h or 7d' });
+        return;
+      }
+      send(res, 200, { window: w, servers: await serverMetrics(pool, w as WindowName) });
+      return;
+    }
+    if (req.url === '/metrics' && req.method === 'GET') {
+      // Prometheus scrape target; same admin auth (bearer admin token or admin session).
+      if (!(await requireAdmin(req, res))) return;
+      res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+      res.end(prometheusText(await serverMetrics(pool, '1h'), upstreams.getStates()));
       return;
     }
     if (req.url === '/api/upstreams' && req.method === 'GET') {
