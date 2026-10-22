@@ -13,8 +13,11 @@ import { logCall } from './audit.js';
 import { splitName, type Aggregator, type PrefixedTool } from './aggregator.js';
 import type { UpstreamPool } from './pool.js';
 import { CALL_TIMEOUT_MS, capResult, grantsAllow, isToolError } from './router.js';
+import { CALL_TOOL, META_TOOLS, SEARCH_TOOL, searchPrompt, searchTools } from './toolsearch.js';
 
 export const MAX_TURNS = 8;
+// Above this many visible tools the model gets search_tools + call_tool instead (toolsearch.ts).
+export const TOOL_SEARCH_THRESHOLD = Number(process.env.CHAT_TOOL_SEARCH_THRESHOLD ?? 40);
 
 export interface LlmEndpoint {
   baseUrl: string;
@@ -360,19 +363,23 @@ export async function handleChat(opts: {
   body: unknown;
   res: http.ServerResponse;
   fetchImpl?: typeof globalThis.fetch;
+  toolSearchThreshold?: number;
 }): Promise<void> {
   const cfg = loadLlmConfig();
   const parsed = ChatBody.safeParse(opts.body);
   if (!parsed.success) throw Object.assign(new Error('invalid messages'), { status: 400 });
   // Same role filter as /mcp tools/list: the model never sees tools the user may not call.
-  const llmTools = toLlmTools(opts.aggregator.listAllTools().filter((t) => grantsAllow(opts.user.role, t.name)));
+  const visible = opts.aggregator.listAllTools().filter((t) => grantsAllow(opts.user.role, t.name));
+  // Many tools: hand the model search_tools + call_tool instead of every schema (toolsearch.ts).
+  const searchMode = visible.length > (opts.toolSearchThreshold ?? TOOL_SEARCH_THRESHOLD);
+  const llmTools = searchMode ? META_TOOLS : toLlmTools(visible);
   const { res } = opts;
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   const emit = (event: string, data: unknown): void => {
     if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
   const messages: LlmMessage[] = [
-    { role: 'system', content: buildSystemPrompt() },
+    { role: 'system', content: searchMode ? `${buildSystemPrompt()}\n${searchPrompt(visible)}` : buildSystemPrompt() },
     ...parsed.data.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
   ];
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
@@ -396,6 +403,42 @@ export async function handleChat(opts: {
     emit('tool', { name, status: 'error', error });
     return { ok: false as const, error };
   };
+  // One tool call on behalf of the user: role check, schema check, upstream call, audit row.
+  // Direct calls and call_tool (search mode) both come through here.
+  const dispatch = async (name: string, argsText: string) => {
+    emit('tool', { name, status: 'start' });
+    const hit = opts.aggregator.resolve(name);
+    if (!hit) return fail(name, '', 'unknown_tool', `unknown tool: ${name}`);
+    if (!grantsAllow(opts.user.role, name))
+      return fail(name, hit.tool.serverSlug, 'forbidden', 'forbidden for role', 0, 'denied');
+    let args: unknown;
+    try {
+      args = argsText ? JSON.parse(argsText) : {};
+    } catch {
+      return fail(name, hit.tool.serverSlug, 'validation', 'arguments must be valid JSON');
+    }
+    const v = validateToolArgs(hit.tool.inputSchema, args);
+    if (!v.ok) return fail(name, hit.tool.serverSlug, 'validation', v.error);
+    const t0 = Date.now();
+    try {
+      const upstreamName = splitName(name)?.tool ?? name;
+      const result = await opts.upstreams.callTool(hit.serverId, upstreamName, v.value, CALL_TIMEOUT_MS);
+      const toolErr = isToolError(result);
+      await logCall(opts.pg, {
+        userId: opts.user.id,
+        keyId: null,
+        serverSlug: hit.tool.serverSlug,
+        tool: name,
+        outcome: toolErr ? 'error' : 'ok',
+        errorClass: toolErr ? 'tool_error' : null,
+        durationMs: Date.now() - t0,
+      }).catch(() => {});
+      emit('tool', { name, status: 'done' });
+      return { ok: true as const, text: JSON.stringify(capResult(result)) };
+    } catch (e) {
+      return fail(name, hit.tool.serverSlug, errorClassFor(e), (e as Error).message ?? 'upstream error', Date.now() - t0);
+    }
+  };
   try {
     await driveLoop({
       messages,
@@ -404,38 +447,33 @@ export async function handleChat(opts: {
         return callLlm(ms);
       },
       callTool: async (name, argsText) => {
-        emit('tool', { name, status: 'start' });
-        const hit = opts.aggregator.resolve(name);
-        if (!hit) return fail(name, '', 'unknown_tool', `unknown tool: ${name}`);
-        if (!grantsAllow(opts.user.role, name))
-          return fail(name, hit.tool.serverSlug, 'forbidden', 'forbidden for role', 0, 'denied');
-        let args: unknown;
-        try {
-          args = argsText ? JSON.parse(argsText) : {};
-        } catch {
-          return fail(name, hit.tool.serverSlug, 'validation', 'arguments must be valid JSON');
+        if (searchMode && name === SEARCH_TOOL) {
+          // Local and read-only: searches only the tools this user may call. Not an upstream call, so not audited.
+          let query = '';
+          try {
+            query = String((JSON.parse(argsText || '{}') as { query?: unknown }).query ?? '');
+          } catch {
+            /* empty query -> no results */
+          }
+          const found = searchTools(visible, query);
+          emit('tool', { name: SEARCH_TOOL, status: 'done', detail: `${found.length} found` });
+          return {
+            ok: true as const,
+            text: JSON.stringify(found.length ? found.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })) : { results: [], hint: 'no match; try other words or the server name' }),
+          };
         }
-        const v = validateToolArgs(hit.tool.inputSchema, args);
-        if (!v.ok) return fail(name, hit.tool.serverSlug, 'validation', v.error);
-        const t0 = Date.now();
-        try {
-          const upstreamName = splitName(name)?.tool ?? name;
-          const result = await opts.upstreams.callTool(hit.serverId, upstreamName, v.value, CALL_TIMEOUT_MS);
-          const toolErr = isToolError(result);
-          await logCall(opts.pg, {
-            userId: opts.user.id,
-            keyId: null,
-            serverSlug: hit.tool.serverSlug,
-            tool: name,
-            outcome: toolErr ? 'error' : 'ok',
-            errorClass: toolErr ? 'tool_error' : null,
-            durationMs: Date.now() - t0,
-          }).catch(() => {});
-          emit('tool', { name, status: 'done' });
-          return { ok: true as const, text: JSON.stringify(capResult(result)) };
-        } catch (e) {
-          return fail(name, hit.tool.serverSlug, errorClassFor(e), (e as Error).message ?? 'upstream error', Date.now() - t0);
+        if (searchMode && name === CALL_TOOL) {
+          // Unwrap and run the named tool through the normal path below: same checks, same audit row.
+          let inner: { name?: unknown; arguments?: unknown } = {};
+          try {
+            inner = JSON.parse(argsText || '{}');
+          } catch {
+            return fail(CALL_TOOL, '', 'validation', 'arguments must be valid JSON');
+          }
+          if (typeof inner.name !== 'string') return fail(CALL_TOOL, '', 'validation', 'call_tool needs a tool name');
+          return dispatch(inner.name, JSON.stringify(inner.arguments ?? {}));
         }
+        return dispatch(name, argsText);
       },
       emit,
     });

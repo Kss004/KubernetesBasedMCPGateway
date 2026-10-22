@@ -28,7 +28,7 @@ images:
   postgres: "postgres:17"
   gateway: "gateway"
   provisioner: "provisioner"
-gatewayTag: "0.4.22"
+gatewayTag: "0.4.23"
 
 storage:
   postgres: 5Gi
@@ -46,6 +46,11 @@ replicas: 1
 rateLimit:
   mcpPerMinute: 120 # per API key on /mcp
   chatPerMinute: 20 # per user on the dashboard chat
+
+chat:
+  # Above this many tools visible to a user, the chat model gets search_tools + call_tool
+  # instead of every schema (Handling many tools). /mcp clients always get the full list.
+  toolSearchThreshold: 40
 
 session:
   # Adds Secure to the session cookie. Keep false over plain http (kind, k3d):

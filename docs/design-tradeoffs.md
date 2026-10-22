@@ -120,6 +120,18 @@ converges within seconds), the `[description changed]` flag, and the LLM fallbac
 Checked live (`P5-vps.md`): deleting one of the two pods during a stream of requests failed none
 of 60. Postgres itself is a single StatefulSet pod (D4), the remaining single point of failure.
 
+### Handling many tools
+
+Every store adds 5 tools and every server a few more; a model handed hundreds of schemas gets
+slow, expensive and worse at choosing. Above `chat.toolSearchThreshold` visible tools, the chat
+agent gets two meta-tools instead: `search_tools(query)` ranks the user's own visible tools by
+keyword overlap (server and tool name words count three times a description word, light plural
+stemming) and returns the top 8 with schemas; `call_tool(name, arguments)` unwraps into the same
+`dispatch` as a direct call, so role check, schema check, timeout and audit row are identical.
+Tradeoffs: one extra model turn per question, and keyword ranking rather than embeddings (no
+model or index to run, deterministic, testable). `/mcp` is unchanged: external clients list every
+tool and do their own selection.
+
 ### Multi-store provisioning (bonus)
 
 - **A separate provisioner pod, not the gateway.** The gateway faces the internet; giving it

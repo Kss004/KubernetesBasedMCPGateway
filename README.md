@@ -313,7 +313,9 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 | LLM resilience: automatic provider fallback | `apps/gateway/src/chat.ts` (`makeLlmCaller`) |
 | Chat correctness guard: no store data shown without a tool call in that request | `apps/gateway/src/chat.ts` (`driveLoop`), D28 |
 
-Not attempted: OAuth on the gateway, many-tools search and hosted MCP servers.
+| Handling many tools: above a threshold (Helm `chat.toolSearchThreshold`, prod 20) the chat model gets `search_tools` + `call_tool` instead of every schema; `call_tool` goes through the same role check, schema check and audit row as a direct call, and search only ever returns tools the user may call | `apps/gateway/src/toolsearch.ts`, `chat.ts` (`dispatch`) |
+
+Not attempted: OAuth on the gateway and hosted MCP servers.
 
 ## 11. Bonus: multi-store provisioning
 

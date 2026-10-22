@@ -367,3 +367,13 @@ Live on the VPS, driven through the gateway API as a throwaway member `e2e-store
 - Testing used the Let's Encrypt staging issuer to spare rate limits; afterwards a store `proof`
   with the prod issuer served HTTPS with a verified Let's Encrypt certificate, then was deleted.
   All test stores were deleted; smoke 14/14, e2e 5/5, netpol ENFORCED after the batch.
+
+## Stand-out: handling many tools (2026-10-22, gateway 0.4.23)
+
+Above `chat.toolSearchThreshold` (prod 20) visible tools, the chat model gets `search_tools` and
+`call_tool` only. Checked live with the threshold briefly set to 5 (the member sees 10 tools):
+"Convert 250 USD to INR" ran `search_tools` (3 found) then `mock__convert_currency`; "What orders
+came in today?" ran `search_tools` (5 found) then `woo__list_orders`, both answered correctly and
+audited under the user. Threshold restored to 20. Unit tests: ranking, meta-tools only above the
+threshold, `call_tool` audited as the real tool, members never find or call denied tools,
+arguments still validated. Gateway unit tests 93; smoke 14/14, e2e 5/5.

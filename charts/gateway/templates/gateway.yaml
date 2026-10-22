@@ -64,6 +64,8 @@ spec:
             - name: RATE_CHAT_PER_MINUTE
               value: {{ .Values.rateLimit.chatPerMinute | quote }}
             # Multi-store: the dashboard's Stores tab is live only with the provisioner deployed.
+            - name: CHAT_TOOL_SEARCH_THRESHOLD
+              value: {{ .Values.chat.toolSearchThreshold | quote }}
             - name: STORES_ENABLED
               value: {{ .Values.provisioner.enabled | quote }}
             - name: STORES_PER_USER

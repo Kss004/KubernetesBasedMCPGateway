@@ -41,7 +41,10 @@ imagePullSecrets: []
 
 # Secrets stay generated in-chart (D11). LLM key out-of-band: make secrets.
 
-replicas: 2 # survives one pod going away; see "Replicas" in docs/design-tradeoffs.md
+replicas: 2
+
+chat:
+  toolSearchThreshold: 20 # 4 servers give 14 tools; each provisioned store adds 5 # survives one pod going away; see "Replicas" in docs/design-tradeoffs.md
 
 session:
   cookieSecure: true # prod is served over https; set false only for an http-only rehearsal

@@ -9,7 +9,7 @@ const PROMPTS = ['What orders came in today?', 'List the products in the store',
 // "woo__list_orders" -> { server: "woo", tool: "list_orders" }
 const splitTool = (name) => {
   const i = name.indexOf('__');
-  return i > 0 ? { server: name.slice(0, i), tool: name.slice(i + 2) } : { server: '?', tool: name };
+  return i > 0 ? { server: name.slice(0, i), tool: name.slice(i + 2) } : { server: 'harbor', tool: name }; // search_tools / call_tool
 };
 
 export default function Chat({ me }) {
