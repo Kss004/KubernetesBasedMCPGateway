@@ -46,3 +46,21 @@ resources:
   wordpress:
     requests: { cpu: 250m, memory: 256Mi }
     limits: { cpu: "1", memory: 1Gi }
+
+# Multi-store bonus: per-namespace ceilings, on for stores the provisioner creates (it sets
+# guardrails.enabled=true); off for the original store.
+guardrails:
+  enabled: false
+  quota:
+    requests.cpu: "1"
+    requests.memory: 1536Mi
+    limits.cpu: "4"
+    limits.memory: 3Gi
+    persistentvolumeclaims: "2"
+    requests.storage: 6Gi
+    pods: "8"
+    services: "5"
+  containerDefault:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  containerMax: { cpu: "1", memory: 1Gi }

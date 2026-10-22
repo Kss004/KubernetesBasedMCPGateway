@@ -289,8 +289,12 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 
 ## 9. Tests
 
-- **Unit:** `cd apps/gateway && npm test` (57 tests). `cd apps/woo-mcp && npm test` (3 tests:
-  OAuth signing, order allowlist, order totals).
+- **Unit:** `cd apps/gateway && npm test` (87 tests), `cd apps/woo-mcp && npm test` (4: OAuth
+  signing, order allowlist, totals, paging), `cd apps/provisioner && npm test` (8: provisioning
+  steps, retries, crash recovery, timeout, teardown).
+- **Postgres integration:** with `TEST_DATABASE_URL` pointing at a throwaway database, the gateway
+  suite adds 10 tests (rate limits and login lock across replicas, concurrent migrations, store
+  limits and ownership).
 - **Live:** `make smoke`, `make e2e`, `make test-netpol`, `make prod-check`.
 - **End-to-end:** 8 rounds by separate tester sessions (browser plus terminal), with every
   finding fixed and retested. Reports are in `docs/notes/E2E-2026-10-19*.md`, and the recording
@@ -309,5 +313,36 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 | LLM resilience: automatic provider fallback | `apps/gateway/src/chat.ts` (`makeLlmCaller`) |
 | Chat correctness guard: no store data shown without a tool call in that request | `apps/gateway/src/chat.ts` (`driveLoop`), D28 |
 
-Not attempted: multi-store provisioning, OAuth on the gateway, many-tools search and hosted MCP
-servers.
+Not attempted: OAuth on the gateway, many-tools search and hosted MCP servers.
+
+## 11. Bonus: multi-store provisioning
+
+From the dashboard's **Stores** tab, any signed-in user creates or deletes stores; each new store's
+MCP server is registered automatically as `store-<name>`, so its tools appear as
+`store-<name>__list_orders` and so on, in chat and in every MCP client.
+
+- **How:** the gateway only writes the wanted state to a `stores` table
+  (`apps/gateway/src/stores.ts`). A separate **provisioner** pod (`apps/provisioner`) works it:
+  creates `urumi-store-<name>`, binds itself a role in that namespace only, `helm upgrade
+  --install` of the same `charts/store` (with `values-provisioned.yaml`), waits for the pods, reads
+  the store's woo-mcp token and registers the server through the gateway admin API. Status moves
+  Provisioning -> Ready (or Failed with the reason); Deleting removes the MCP registration, then the
+  namespace with its volumes and Secrets.
+- **Each store gets** its own namespace, MariaDB and WordPress volumes, generated Secrets, Ingress
+  host `shop-<name>.<domain>` with its own Let's Encrypt certificate, NetworkPolicies, and a
+  ResourceQuota plus LimitRange (`charts/store/templates/guardrails.yaml`).
+- **Guardrails:** 2 stores per user and 4 in total (`provisioner.maxPerUser` / `maxTotal`), a
+  10-minute provisioning timeout, DNS-safe names with reserved words refused.
+- **Recovery:** work is claimed with a lease in Postgres; every step checks real state first, so
+  retries are safe, and a provisioner restarted mid-install clears the half-done release and
+  finishes (checked live, `docs/notes/P5-vps.md`).
+- **Isolation and least privilege:** one store's woo-mcp cannot reach another store's WordPress or
+  database (NetworkPolicies, checked live). The provisioner can create namespaces and bind one
+  role, and nothing else cluster-wide; it cannot read the gateway's Secrets; a
+  ValidatingAdmissionPolicy rejects any write it makes outside `urumi-store-*`
+  (`charts/gateway/templates/provisioner.yaml`).
+- **The brief's test:** stores `alpha` and `beta` created at the same time, a COD order in each,
+  then chat "compare today's orders across alpha and beta" called `store-alpha__list_orders` and
+  `store-beta__list_orders`; deleting `beta` removed its namespace, volumes, Secrets and tools.
+- **Turn it on:** `provisioner.enabled: true` and `provisioner.storeDomain`. The prod values set
+  both; local kind leaves it off (it has been exercised on the VPS only).

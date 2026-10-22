@@ -27,7 +27,8 @@ imagePullSecrets: []
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.4.21"
+  provisioner: "provisioner"
+gatewayTag: "0.4.22"
 
 storage:
   postgres: 5Gi
@@ -72,3 +73,16 @@ llm:
     baseUrl: "https://api.groq.com/openai/v1"
     model: "qwen/qwen3.8-27b"
     secretName: "llm-groq"
+
+# Multi-store bonus: a separate pod that creates and deletes stores (charts/store) in their own
+# urumi-store-<name> namespaces and registers each one's MCP server (provisioner.yaml).
+provisioner:
+  enabled: false
+  tag: "0.1.0"
+  storeDomain: "" # stores get shop-<name>.<storeDomain>
+  storeScheme: http
+  tlsIssuer: "" # a ClusterIssuer gives each store a Certificate; empty = no TLS
+  storeValues: "values.yaml,values-provisioned.yaml" # files in charts/store, applied in order
+  maxPerUser: 2
+  maxTotal: 4
+  timeoutMin: 10

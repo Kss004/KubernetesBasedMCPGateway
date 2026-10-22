@@ -1,0 +1,16 @@
+# Overlay for stores created by the provisioner (multi-store bonus), applied on top of
+# values-prod.yaml. The provisioner sets storeHost, storeUrl and the TLS values per store.
+# Smaller than the original store so several fit on one node, and inside the per-store quota
+# (guardrails.yaml): requests about 0.4 CPU and 0.8Gi per store including the bootstrap Job.
+guardrails:
+  enabled: true
+storage:
+  mariadb: 2Gi
+  wordpress: 2Gi
+resources:
+  mariadb:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  wordpress:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: "1", memory: 768Mi }

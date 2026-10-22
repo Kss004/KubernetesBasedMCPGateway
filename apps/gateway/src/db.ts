@@ -101,6 +101,30 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    // Multi-store provisioning: the gateway records the wanted state, the provisioner pod works
+    // it (stores.ts, apps/provisioner). lease_* lets a restarted provisioner pick work back up.
+    version: 8,
+    sql: `
+      CREATE TABLE IF NOT EXISTS stores (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL UNIQUE,
+        owner_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        namespace text NOT NULL UNIQUE,
+        status text NOT NULL CHECK (status IN ('Provisioning','Ready','Failed','Deleting')),
+        step text,
+        reason text,
+        url text,
+        server_id uuid REFERENCES servers(id) ON DELETE SET NULL,
+        attempts int NOT NULL DEFAULT 0,
+        deadline timestamptz NOT NULL,
+        lease_owner text,
+        lease_until timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `,
+  },
 ];
 
 export function createPool(pg: {

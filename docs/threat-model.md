@@ -156,6 +156,26 @@ step for write tools in chat. The audit log records every call.
 - **Chat agent runs as the user.** The model sees only the tools that user may call, every call
   is audited under that user, and bad arguments go back to the model.
 
+### Store provisioning (multi-store bonus)
+
+- **Who holds Kubernetes rights.** Only the provisioner pod, never the internet-facing gateway
+  (which mounts no ServiceAccount token). The provisioner takes no network requests at all; it
+  reads the `stores` table.
+- **How little it holds.** Cluster-wide: create/get/delete namespaces, create RoleBindings, and
+  `bind` one ClusterRole (`gateway-store-manager`). It gets that role only by binding it inside
+  each store namespace it creates, so it can read and write only there. Checked: it cannot read
+  Secrets in `urumi-gateway` or the original `urumi-store`.
+- **What stops it widening that.** RoleBinding create is cluster-wide, so on its own the
+  provisioner could bind the store role in `urumi-gateway`. A ValidatingAdmissionPolicy rejects
+  every write it makes outside `urumi-store-<name>` (checked: binding itself in `urumi-gateway`,
+  and creating `evil-ns`, are both denied).
+- **Store to store.** Each store namespace has the store chart's default-deny NetworkPolicies:
+  MariaDB and WordPress accept only pods of their own namespace (and the ingress controller for
+  WordPress), and woo-mcp accepts only gateway pods. Checked: alpha's woo-mcp is refused by beta's
+  WordPress and database and by the original store's database.
+- **Users.** A member manages only their own stores; quotas cap stores per user and per platform,
+  and each namespace has a ResourceQuota and LimitRange, so one store cannot starve the node.
+
 ## Known gaps (stated, not hidden)
 
 - **No egress default-deny (D25).** The chat agent needs LLM, DNS, Postgres and upstream

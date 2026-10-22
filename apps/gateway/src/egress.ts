@@ -1,5 +1,6 @@
 // SSRF guard for upstream server URLs (T11.2). Two kinds of upstream are allowed:
-// - in-cluster: a Service in urumi-store / urumi-upstreams by DNS name (http or https);
+// - in-cluster: a Service in urumi-store, urumi-store-<name> (provisioned stores),
+//   urumi-upstreams or urumi-hosted, by DNS name (http or https);
 // - external: a public https host, e.g. a hosted MCP server.
 // External hosts are checked twice: when an admin saves the URL (clear 400), and on every
 // connection, where the resolved IP is pinned and re-checked (a name that later points at
@@ -10,7 +11,8 @@ import net from 'node:net';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-const CLUSTER_SERVICE = /^[a-z0-9-]+\.(urumi-store|urumi-upstreams)(\.svc(\.cluster\.local)?)?$/;
+// urumi-store-<name> are provisioned stores; urumi-hosted holds servers deployed by image.
+const CLUSTER_SERVICE = /^[a-z0-9-]+\.(urumi-store(-[a-z0-9-]+)?|urumi-upstreams|urumi-hosted)(\.svc(\.cluster\.local)?)?$/;
 // Internal-only name suffixes that must never be treated as public hosts.
 const INTERNAL_SUFFIXES = ['.localhost', '.local', '.internal', '.svc', '.cluster.local', '.home.arpa'];
 
@@ -61,7 +63,7 @@ export function classifyUrl(raw: string): Target | null {
 /** Admission check: the shape rules, plus every address an external host resolves to. */
 export async function checkUrl(raw: string, lookup = dns.promises.lookup): Promise<string | null> {
   const t = classifyUrl(raw);
-  if (!t) return 'url must be an in-cluster Service (urumi-store / urumi-upstreams) or a public https host';
+  if (!t) return 'url must be an in-cluster Service (urumi-store*, urumi-upstreams, urumi-hosted) or a public https host';
   if (t.kind === 'cluster') return null;
   let addrs: Array<{ address: string }>;
   try {

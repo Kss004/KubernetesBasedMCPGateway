@@ -10,14 +10,16 @@ GW_RELEASE ?= gateway
 STORE_RELEASE ?= store
 UP_RELEASE ?= upstreams
 GATEWAY_IMG ?= gateway
-GATEWAY_TAG ?= 0.4.21
+GATEWAY_TAG ?= 0.4.22
 WOO_IMG ?= woo-mcp
 WOO_TAG ?= 0.1.8
 MOCK_IMG ?= mock-mcp
 MOCK_TAG ?= 0.1.1
 UTILS_IMG ?= utils-mcp
 UTILS_TAG ?= 0.1.2
-IMAGES = $(GATEWAY_IMG):$(GATEWAY_TAG) $(WOO_IMG):$(WOO_TAG) $(MOCK_IMG):$(MOCK_TAG) $(UTILS_IMG):$(UTILS_TAG)
+PROVISIONER_IMG ?= provisioner
+PROVISIONER_TAG ?= 0.1.0
+IMAGES = $(GATEWAY_IMG):$(GATEWAY_TAG) $(WOO_IMG):$(WOO_TAG) $(MOCK_IMG):$(MOCK_TAG) $(UTILS_IMG):$(UTILS_TAG) $(PROVISIONER_IMG):$(PROVISIONER_TAG)
 
 # Prod rehearsal on k3d (values-prod.yaml: Traefik, local-path). Own kubeconfig
 # file, so kind stays the current context; ports 8081/8444 leave kind's 80/443 alone.
@@ -45,6 +47,7 @@ up: ## Create cluster, install ingress, build+load images, secrets, helm install
 	kind load docker-image $(WOO_IMG):$(WOO_TAG) --name $(CLUSTER)
 	kind load docker-image $(MOCK_IMG):$(MOCK_TAG) --name $(CLUSTER)
 	kind load docker-image $(UTILS_IMG):$(UTILS_TAG) --name $(CLUSTER)
+	kind load docker-image $(PROVISIONER_IMG):$(PROVISIONER_TAG) --name $(CLUSTER)
 	kubectl create ns $(GW_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create ns $(STORE_NS) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl create ns $(UP_NS) --dry-run=client -o yaml | kubectl apply -f -
@@ -65,6 +68,7 @@ images: ## Build the four service images locally
 	docker build -t $(WOO_IMG):$(WOO_TAG) -f apps/woo-mcp/Dockerfile .
 	docker build -t $(MOCK_IMG):$(MOCK_TAG) -f apps/mock-mcp/Dockerfile .
 	docker build -t $(UTILS_IMG):$(UTILS_TAG) -f apps/utils-mcp/Dockerfile .
+	docker build -t $(PROVISIONER_IMG):$(PROVISIONER_TAG) -f apps/provisioner/Dockerfile .
 
 down: ## helm uninstall, keep data (PVCs/Secrets carry keep policy, D20)
 	helm uninstall $(GW_RELEASE) -n $(GW_NS) || true

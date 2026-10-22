@@ -7,6 +7,7 @@ import Team from './Team.jsx';
 import Audit from './Audit.jsx';
 import Chat from './Chat.jsx';
 import Orders from './Orders.jsx';
+import Stores from './Stores.jsx';
 import { PageHead } from './ui.jsx';
 
 // Harbor wordmark: a line anchor in the accent colour (inline SVG, CSP-safe).
@@ -25,6 +26,7 @@ function Brand() {
 const TABS = [
   { id: 'servers', label: 'Servers', adminOnly: true },
   { id: 'orders', label: 'Orders' },
+  { id: 'stores', label: 'Stores' },
   { id: 'team', label: 'Team & Keys' },
   { id: 'audit', label: 'Audit' },
   { id: 'chat', label: 'Chat' },
@@ -41,6 +43,12 @@ const PAGES = {
     title: 'Every order,',
     accent: 'page by page.',
     lead: () => 'Store orders through the woo server, with totals in the store currency. Each page load is one audited woo__list_orders call.',
+  },
+  stores: {
+    title: 'A new store,',
+    accent: 'in minutes.',
+    lead: (me) =>
+      `Each store runs in its own namespace with its own database, volumes and address, and its MCP server is registered automatically.${me.role === 'admin' ? ' You see every store.' : ' You see your own stores.'}`,
   },
   team: {
     title: 'Your team and',
@@ -126,6 +134,7 @@ export default function App() {
             {head(tab)}
             {tab === 'servers' && <Servers setStatus={setStatus} />}
             {tab === 'orders' && <Orders setStatus={setStatus} />}
+            {tab === 'stores' && <Stores me={me} setStatus={setStatus} />}
             {tab === 'team' && <Team me={me} setStatus={setStatus} />}
             {tab === 'audit' && <Audit me={me} setStatus={setStatus} />}
           </div>

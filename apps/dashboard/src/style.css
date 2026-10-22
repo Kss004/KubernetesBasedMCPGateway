@@ -345,3 +345,10 @@ table.is-loading tbody { opacity: 0.5; transition: opacity 0.15s; }
 .win-pick { float: right; display: inline-flex; gap: 0.25rem; }
 .win-pick button { padding: 0.1rem 0.5rem; font-size: 0.75rem; }
 .win-pick button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* Stores page (multi-store) */
+.store-Ready { background: var(--accent-soft); border-color: rgba(19, 107, 105, 0.25); color: var(--accent); }
+.store-Provisioning, .store-Deleting { background: rgba(194, 101, 26, 0.1); border-color: rgba(194, 101, 26, 0.3); color: var(--warn); }
+.store-Failed { background: rgba(184, 50, 42, 0.08); border-color: rgba(184, 50, 42, 0.25); color: var(--bad); }
+.store-reason { margin-top: 0.25rem; font-size: 0.8rem; color: var(--bad); max-width: 32rem; }
+.small { font-size: 0.82rem; }

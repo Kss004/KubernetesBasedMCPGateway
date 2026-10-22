@@ -29,6 +29,7 @@ import {
   clientIp,
 } from './session.js';
 import { LoginLimiter, RateLimiter, pruneLimits } from './ratelimit.js';
+import { createStore, deleteStore, listStores } from './stores.js';
 import { hashKey, identifyKey } from './keys.js';
 import { logCall } from './audit.js';
 
@@ -36,6 +37,13 @@ const cfg = loadConfig();
 // Per-minute budgets (Scaling): counted in Postgres, so they hold across replicas. 0 disables.
 const MCP_PER_MINUTE = Number(process.env.RATE_MCP_PER_MINUTE ?? 120);
 const CHAT_PER_MINUTE = Number(process.env.RATE_CHAT_PER_MINUTE ?? 20);
+// Multi-store: only on when the chart deploys the provisioner (it does the Kubernetes work).
+const STORES_ENABLED = process.env.STORES_ENABLED === 'true';
+const STORE_LIMITS = {
+  perUser: Number(process.env.STORES_PER_USER ?? 2),
+  total: Number(process.env.STORES_MAX ?? 4),
+  timeoutMin: Number(process.env.STORES_TIMEOUT_MIN ?? 10),
+};
 // Secure only when served over https (values-prod), or http login would break.
 const COOKIE_FLAGS = `HttpOnly; Path=/; SameSite=Lax${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 const pool = createPool(cfg.pg);
@@ -483,6 +491,42 @@ const server = http.createServer(async (req, res) => {
       const u = await sessionUser(req);
       if (!u) send(res, 401, { error: 'unauthorized' });
       else send(res, 200, u);
+      return;
+    }
+    if ((req.url ?? '').startsWith('/api/stores')) {
+      // Multi-store: any signed-in user manages their own stores; admins see and delete all.
+      const u = await sessionUser(req);
+      if (!u) {
+        send(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (req.method !== 'GET' && !isJsonReq(req)) {
+        send(res, 403, { error: 'json content type required' });
+        return;
+      }
+      try {
+        if (req.method === 'GET' && req.url === '/api/stores') {
+          send(res, 200, { enabled: STORES_ENABLED, limits: STORE_LIMITS, stores: await listStores(pool, u) });
+          return;
+        }
+        if (!STORES_ENABLED) {
+          send(res, 503, { error: 'store provisioning is not enabled on this deployment' });
+          return;
+        }
+        if (req.method === 'POST' && req.url === '/api/stores') {
+          send(res, 201, await createStore(pool, u, await readJson(req), STORE_LIMITS));
+          return;
+        }
+        const m = /^\/api\/stores\/([0-9a-f-]{36})$/.exec(req.url ?? '');
+        if (req.method === 'DELETE' && m) {
+          if (await deleteStore(pool, u, m[1])) send(res, 202, { status: 'Deleting' });
+          else send(res, 404, { error: 'not found' });
+          return;
+        }
+        send(res, 405, { error: 'method not allowed' });
+      } catch (e) {
+        send(res, errStatus(e), { error: errMessage(e) });
+      }
       return;
     }
     if ((req.url ?? '').startsWith('/api/me/keys')) {

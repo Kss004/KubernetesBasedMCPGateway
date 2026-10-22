@@ -1,0 +1,189 @@
+{{- if .Values.provisioner.enabled }}
+{{- $sa := printf "%s-provisioner" .Release.Name }}
+{{- $storeRole := printf "%s-store-manager" .Release.Name }}
+# Multi-store bonus: the store provisioner. The only workload with Kubernetes write rights, and
+# those are confined to urumi-store-* namespaces:
+#   1. cluster-wide it may only create/get/delete namespaces, create RoleBindings, and bind the
+#      one store-manager ClusterRole (so it can grant itself rights only inside a store namespace);
+#   2. the ValidatingAdmissionPolicy below rejects any write it makes outside urumi-store-*;
+#   3. it can read nothing outside those namespaces (no cluster-wide get on Secrets).
+# The internet-facing gateway keeps no ServiceAccount token at all.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-provisioner-cluster
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["create"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: ["{{ $storeRole }}"]
+    verbs: ["bind"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-provisioner-cluster
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-provisioner-cluster
+---
+# Bound per store namespace (by the provisioner, as a RoleBinding), never cluster-wide: exactly
+# what `helm install` of charts/store needs, including the bootstrap Job's Role (RBAC lets you
+# grant only rights you hold).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $storeRole }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "services", "serviceaccounts", "persistentvolumeclaims", "resourcequotas", "limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["traefik.io"]
+    resources: ["middlewares"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Even if its RBAC were wider, the provisioner cannot write outside urumi-store-<name>
+# (and not to the original urumi-store either: the prefix needs the trailing dash).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ .Release.Name }}-provisioner-scope
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["*"]
+        scope: "*"
+  matchConditions:
+    - name: is-provisioner
+      expression: "request.userInfo.username == 'system:serviceaccount:{{ .Release.Namespace }}:{{ $sa }}'"
+  validations:
+    - expression: >-
+        request.namespace.startsWith('urumi-store-') ||
+        (request.resource.resource == 'namespaces' && request.name.startsWith('urumi-store-'))
+      message: "the store provisioner may only write inside urumi-store-<name> namespaces"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ .Release.Name }}-provisioner-scope
+spec:
+  policyName: {{ .Release.Name }}-provisioner-scope
+  validationActions: [Deny]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-provisioner
+spec:
+  # One is enough; a second would be safe too (leases in Postgres), it just is not needed.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: provisioner
+  template:
+    metadata:
+      labels:
+        app: provisioner
+    spec:
+      serviceAccountName: {{ $sa }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: provisioner
+          image: "{{ .Values.images.provisioner }}:{{ .Values.provisioner.tag }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: PGHOST
+              value: {{ .Release.Name }}-postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-pg, key: password }
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-admin, key: token }
+            - name: GATEWAY_URL
+              value: http://{{ .Release.Name }}-gateway:3000
+            - name: STORE_ROLE
+              value: {{ $storeRole }}
+            - name: SA_NAME
+              value: {{ $sa }}
+            - name: SA_NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: STORE_DOMAIN
+              value: {{ required "provisioner.storeDomain is required" .Values.provisioner.storeDomain | quote }}
+            - name: STORE_SCHEME
+              value: {{ .Values.provisioner.storeScheme | quote }}
+            - name: STORE_TLS_ISSUER
+              value: {{ .Values.provisioner.tlsIssuer | quote }}
+            - name: STORE_VALUES
+              value: {{ .Values.provisioner.storeValues | quote }}
+            - name: TIMEOUT_MIN
+              value: {{ .Values.provisioner.timeoutMin | quote }}
+            # fetch trusts the API server through the ServiceAccount CA.
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp } # helm cache and config
+          livenessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+            periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

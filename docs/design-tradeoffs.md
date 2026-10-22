@@ -120,6 +120,26 @@ converges within seconds), the `[description changed]` flag, and the LLM fallbac
 Checked live (`P5-vps.md`): deleting one of the two pods during a stream of requests failed none
 of 60. Postgres itself is a single StatefulSet pod (D4), the remaining single point of failure.
 
+### Multi-store provisioning (bonus)
+
+- **A separate provisioner pod, not the gateway.** The gateway faces the internet; giving it
+  rights to create namespaces would make any gateway bug a cluster problem. The gateway only
+  records the wanted state (`stores` table); the provisioner works it.
+- **Helm, the same chart.** Each store is `helm upgrade --install store charts/store` into
+  `urumi-store-<name>` with `values-provisioned.yaml` (smaller requests, 2Gi volumes, guardrails
+  on). The original store and provisioned stores share one chart, so a chart fix reaches all.
+- **Reconcile, not a request handler.** Every 5 seconds the provisioner claims stores that need
+  work with a lease in Postgres (`FOR UPDATE SKIP LOCKED`) and runs idempotent steps, each one
+  checking real state first. Retries and restarts are therefore the same code path as the first
+  run; a release left `pending` by a dead provisioner is cleared and reinstalled. A store that
+  misses its 10-minute deadline, or fails the chart 3 times, ends Failed with the reason.
+- **Delete = namespace.** Everything a store owns is namespaced (release, Secrets marked keep,
+  PVCs, Ingress, Certificate), so teardown is: remove the MCP registration (tools disappear
+  first), then delete the namespace; local-path deletes the volumes.
+- **Tradeoffs.** Stores are visible only after about 2 minutes (WordPress and the WooCommerce
+  bootstrap); the provisioner is one pod (a second would be safe thanks to the leases, just not
+  needed); every store costs about 0.3 CPU and 0.5Gi requested, which is why the platform cap is 4.
+
 ## Decisions log
 
 - **D1 TS/Node 24 everywhere** — one runtime/image, shared types, reference SDK (1.x pinned, T0.4). Cost: no Python ecosystem.

@@ -29,6 +29,7 @@ images:
   # Built with docker buildx for linux/amd64,linux/arm64 and pushed to GHCR
   # (not pushed yet). GHCR repo names must be lowercase.
   gateway: "ghcr.io/kss004/kubernetesbasedmcpgateway/gateway"
+  provisioner: "ghcr.io/kss004/kubernetesbasedmcpgateway/provisioner"
 
 storage:
   postgres: 5Gi
@@ -44,3 +45,10 @@ replicas: 2 # survives one pod going away; see "Replicas" in docs/design-tradeof
 
 session:
   cookieSecure: true # prod is served over https; set false only for an http-only rehearsal
+
+provisioner:
+  enabled: true
+  storeDomain: 169-58-78-14.sslip.io # sslip.io resolves shop-<name>.169-58-78-14.sslip.io to the VPS
+  storeScheme: https
+  tlsIssuer: letsencrypt-prod
+  storeValues: "values-prod.yaml,values-provisioned.yaml"

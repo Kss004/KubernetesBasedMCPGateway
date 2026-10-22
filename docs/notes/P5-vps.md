@@ -340,3 +340,30 @@ others stayed Connected, and it recovered at 1. smoke 14/14, e2e 5/5. Dated note
   4; deleting one gateway pod during 60 requests failed none of them. Unit tests 87, plus 5
   Postgres integration tests (`TEST_DATABASE_URL`, run against a throwaway Postgres 17: limits,
   two-replica races, the lock, pruning, concurrent migrations). smoke 14/14, e2e 5/5.
+
+## Bonus: multi-store provisioning (2026-10-22, gateway 0.4.22, provisioner 0.1.0)
+
+Live on the VPS, driven through the gateway API as a throwaway member `e2e-stores`:
+- `alpha` and `beta` requested at the same moment: both went Provisioning -> Ready in under
+  2 minutes, in parallel. A third request from the same user: `429 limit reached: 2 stores per
+  user`.
+- Each got `urumi-store-<name>` with MariaDB, WordPress (2Gi volumes), woo-mcp, the bootstrap Job,
+  Ingress `shop-<name>.169-58-78-14.sslip.io`, a Certificate, 5 NetworkPolicies, a ResourceQuota
+  (used: 300m/1 CPU, 512Mi/1.5Gi requested) and a LimitRange. Servers `store-alpha` and
+  `store-beta` Connected; 10 new tools.
+- The brief's test: a COD order in each store (alpha 2 x 20.00 = 40.00, beta 7.50), then chat as the
+  member: "compare today's orders across the alpha and beta stores" called
+  `store-alpha__list_orders` and `store-beta__list_orders` and answered 1 order / 40.00 vs
+  1 order / 7.50. Deleting `beta`: in about 30s its MCP server and 5 tools, its namespace and both
+  PersistentVolumes were gone.
+- Isolation: alpha's woo-mcp reaches alpha's WordPress, and is refused by beta's WordPress, beta's
+  MariaDB and the original store's MariaDB.
+- Least privilege: `kubectl auth can-i --as` the provisioner: no Secrets in `urumi-gateway` or
+  `urumi-store`, yes in `urumi-store-alpha`; the ValidatingAdmissionPolicy denied it binding
+  itself in `urumi-gateway` and creating `evil-ns`.
+- Recovery: the provisioner pod was killed while helm was installing `gamma` (release
+  `pending-install`); the new pod claimed it after the lease ran out, cleared the release,
+  reinstalled, and gamma reached Ready with one clean release.
+- Testing used the Let's Encrypt staging issuer to spare rate limits; afterwards a store `proof`
+  with the prod issuer served HTTPS with a verified Let's Encrypt certificate, then was deleted.
+  All test stores were deleted; smoke 14/14, e2e 5/5, netpol ENFORCED after the batch.
