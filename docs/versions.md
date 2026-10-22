@@ -67,3 +67,11 @@ Decision: ingress-nginx upstream repo is **archived (read-only since Mar 2026)**
 ## Calico
 
 Not pinned. Only needed if T1.1 shows kindnet policies are not enforced — the T1.1 test result is the authority, not a version note.
+
+## Added for the stand-out items (2026-10-22)
+
+| Component | Pinned | Evidence |
+|---|---|---|
+| undici (gateway, SSRF guard) | 7.29.1 | `node -p process.versions.undici` on Node 24.22.0 → `7.29.1` (the version Node bundles); `npm view undici@7.29.1 time` → published 2026-09-04 |
+| helm in the provisioner image | v4.3.0 | `https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz.sha256sum` → `86584a54…54fb`, verified in `apps/provisioner/Dockerfile`; the extracted binary's sha256 equals the VPS's `/usr/local/bin/helm` |
+| ValidatingAdmissionPolicy | admissionregistration.k8s.io/v1 | GA since Kubernetes 1.30; accepted by `kubectl apply --dry-run=server` on k3s v1.36.5 |

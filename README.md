@@ -82,7 +82,8 @@ make up
 This one command:
 1. creates the kind cluster;
 2. installs ingress-nginx;
-3. builds the 4 service images and loads them into kind;
+3. builds the 5 service images (gateway, woo-mcp, mock-mcp, utils-mcp, provisioner) and loads them
+   into kind;
 4. creates the namespaces and placeholder LLM Secrets;
 5. installs the 3 charts and registers the upstream servers (`make seed`): the 3 in-cluster ones,
    plus DeepWiki when the cluster has internet (`DEEPWIKI_URL=` skips it).
@@ -103,7 +104,7 @@ Then:
    ```
 2. **Check it:**
    ```bash
-   make smoke   # 13 live checks: dashboard, 401s, headers, upstreams Connected, no secrets returned, storefront
+   make smoke   # 14 live checks: dashboard, 401s, headers, upstreams Connected, no secrets returned, storefront
    make e2e     # product via /mcp, storefront COD order via the Store API, order read back, key revoked
    ```
 3. **Create the dashboard users** (an admin A and a member B) with the admin token:
