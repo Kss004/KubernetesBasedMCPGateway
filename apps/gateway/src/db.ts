@@ -83,6 +83,24 @@ const MIGRATIONS: Migration[] = [
     version: 6,
     sql: `CREATE INDEX IF NOT EXISTS audit_created_idx ON audit(created_at DESC);`,
   },
+  {
+    // Scaling: rate-limit and login-lock counters shared by every replica (ratelimit.ts).
+    version: 7,
+    sql: `
+      CREATE TABLE IF NOT EXISTS rate_counters (
+        key text NOT NULL,
+        window_start timestamptz NOT NULL,
+        n int NOT NULL,
+        PRIMARY KEY (key, window_start)
+      );
+      CREATE TABLE IF NOT EXISTS login_limits (
+        key text PRIMARY KEY,
+        count int NOT NULL,
+        first_at timestamptz NOT NULL,
+        locked_until timestamptz
+      );
+    `,
+  },
 ];
 
 export function createPool(pg: {
@@ -107,9 +125,14 @@ export function createPool(pg: {
   return pool;
 }
 
+// Several replicas may start at once: a session-level advisory lock makes them migrate one at a
+// time, so the second one finds every version already applied.
+const MIGRATE_LOCK = 7_446_001;
+
 export async function migrate(pool: Pool): Promise<void> {
   const client = await pool.connect();
   try {
+    await client.query('SELECT pg_advisory_lock($1)', [MIGRATE_LOCK]);
     await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (version int PRIMARY KEY)');
     for (const m of MIGRATIONS) {
       const { rows } = await client.query('SELECT 1 FROM schema_migrations WHERE version = $1', [m.version]);
@@ -126,6 +149,8 @@ export async function migrate(pool: Pool): Promise<void> {
       }
     }
   } finally {
+    // Pooled connections stay open, so the session lock must be released explicitly.
+    await client.query('SELECT pg_advisory_unlock($1)', [MIGRATE_LOCK]).catch(() => {});
     client.release();
   }
 }

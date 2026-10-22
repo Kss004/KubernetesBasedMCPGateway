@@ -324,3 +324,19 @@ others stayed Connected, and it recovered at 1. smoke 14/14, e2e 5/5. Dated note
   `Unreachable | connection refused (nothing listening)`; it recovered at 1.
 - Checked: 7-day metrics (woo 47 calls, 4.3% errors, p50 283 ms, p95 1077 ms), a bad window gives
   400, `/metrics` without auth gives 401. Unit tests 89; smoke 14/14, e2e 5/5.
+
+## Stand-out: scaling (2026-10-22, gateway 0.4.21)
+
+- Production runs 2 gateway pods with a PodDisruptionBudget (`minAvailable: 1`).
+- Rate limits: 120 requests a minute per API key on `/mcp`, 20 chat messages a minute per user
+  (Helm values `rateLimit.*`), counted in Postgres (`rate_counters`, one atomic upsert per hit).
+  Over the limit: 429 with `Retry-After` and an audit row `denied` / `rate_limited`.
+- The login lock moved from memory to Postgres (`login_limits`), so it holds across pods.
+- Migrations take a Postgres advisory lock; a server add/edit/disable/remove sends
+  `NOTIFY servers_changed` and every pod refreshes at once.
+- Checked live with 2 pods: 125 `tools/list` calls with one key gave 120 × 200 and 5 × 429
+  (`retry-after: 8`) plus a `rate_limited` audit row; 6 bad logins for one name gave 401 × 5 then
+  429; disabling `mock` emptied its tools on both pods within a second, and re-enabling restored
+  4; deleting one gateway pod during 60 requests failed none of them. Unit tests 87, plus 5
+  Postgres integration tests (`TEST_DATABASE_URL`, run against a throwaway Postgres 17: limits,
+  two-replica races, the lock, pruning, concurrent migrations). smoke 14/14, e2e 5/5.

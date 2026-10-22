@@ -26,12 +26,16 @@ import {
   mintSession,
   verifySession,
   parseCookies,
-  LoginLimiter,
   clientIp,
 } from './session.js';
+import { LoginLimiter, RateLimiter, pruneLimits } from './ratelimit.js';
+import { hashKey, identifyKey } from './keys.js';
+import { logCall } from './audit.js';
 
 const cfg = loadConfig();
-const loginLimiter = new LoginLimiter();
+// Per-minute budgets (Scaling): counted in Postgres, so they hold across replicas. 0 disables.
+const MCP_PER_MINUTE = Number(process.env.RATE_MCP_PER_MINUTE ?? 120);
+const CHAT_PER_MINUTE = Number(process.env.RATE_CHAT_PER_MINUTE ?? 20);
 // Secure only when served over https (values-prod), or http login would break.
 const COOKIE_FLAGS = `HttpOnly; Path=/; SameSite=Lax${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`;
 const pool = createPool(cfg.pg);
@@ -47,15 +51,40 @@ for (let i = 1; ; i++) {
     await new Promise((r) => setTimeout(r, 3000));
   }
 }
+const loginLimiter = new LoginLimiter(pool);
+const rateLimiter = new RateLimiter(pool);
+setInterval(() => void pruneLimits(pool).catch((e) => console.error('prune limits:', (e as Error).message)), 60_000).unref();
 const upstreams = new UpstreamPool(pool, cfg.credKey);
 upstreams.start();
 const aggregator = new Aggregator(pool, cfg.credKey);
 aggregator.start();
 // After an admin server change, refresh status (pool first) and tools now, not on the next timer.
-const refreshUpstreams = async (): Promise<void> => {
+const refreshLocal = async (): Promise<void> => {
   await upstreams.refreshNow().catch(() => {});
   await aggregator.refresh().catch(() => {});
 };
+// With several replicas, the pod that handled the change tells the others through Postgres, so a
+// disabled server disappears everywhere at once, not after the other pods' next timer.
+const refreshUpstreams = async (): Promise<void> => {
+  await refreshLocal();
+  await pool.query('NOTIFY servers_changed').catch((e) => console.error('notify:', (e as Error).message));
+};
+void listenForServerChanges();
+
+async function listenForServerChanges(): Promise<void> {
+  for (;;) {
+    try {
+      const client = await pool.connect();
+      client.on('notification', () => void refreshLocal());
+      await client.query('LISTEN servers_changed');
+      await new Promise<void>((resolve) => client.once('error', () => resolve()).once('end', () => resolve()));
+      client.release(true); // connection lost: drop it and listen again
+    } catch (e) {
+      console.error('listen servers_changed:', (e as Error).message);
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? '';
 const SESSION_RAW = process.env.SESSION_SECRET ?? '';
@@ -185,6 +214,18 @@ const server = http.createServer(async (req, res) => {
         send(res, 401, { error: 'unauthorized' });
         return;
       }
+      // Per-key budget, before the body is read. Keyed by the key's hash, so unknown keys are
+      // limited too; a known key's 429 is audited under its user.
+      const bearer = (req.headers.authorization ?? '').slice(7);
+      const rl = await rateLimiter.hit(`mcp:${hashKey(bearer)}`, MCP_PER_MINUTE);
+      if (!rl.ok) {
+        identifyKey(pool, bearer)
+          .then((k) => k && logCall(pool, { userId: k.userId, keyId: k.keyId, serverSlug: '', tool: 'mcp:rate', outcome: 'denied', errorClass: 'rate_limited', durationMs: 0 }))
+          .catch(() => {});
+        res.setHeader('Retry-After', String(rl.retryAfter));
+        send(res, 429, { jsonrpc: '2.0', id: null, error: { code: -32029, message: `rate limit: ${MCP_PER_MINUTE} requests per minute per key` } });
+        return;
+      }
       try {
         const body = await readJson(req, 1 << 20);
         const out = await handleMcp({
@@ -296,6 +337,13 @@ const server = http.createServer(async (req, res) => {
         send(res, 403, { error: 'json content type required' });
         return;
       }
+      const rl = await rateLimiter.hit(`chat:${u.id}`, CHAT_PER_MINUTE);
+      if (!rl.ok) {
+        await logCall(pool, { userId: u.id, keyId: null, serverSlug: '', tool: 'chat:rate', outcome: 'denied', errorClass: 'rate_limited', durationMs: 0 }).catch(() => {});
+        res.setHeader('Retry-After', String(rl.retryAfter));
+        send(res, 429, { error: `rate limit: ${CHAT_PER_MINUTE} chat messages per minute` });
+        return;
+      }
       try {
         await handleChat({ pg: pool, aggregator, upstreams, user: u, body: await readJson(req, 256 << 10), res });
       } catch (e) {
@@ -382,7 +430,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const v = z.object({ name: z.string().min(1), password: z.string().min(1) }).parse(await readJson(req));
         const keys = [`ip:${clientIp(req.headers['x-forwarded-for'], req.socket.remoteAddress)}`, `name:${v.name.toLowerCase()}`];
-        const wait = loginLimiter.lockedFor(keys);
+        const wait = await loginLimiter.lockedFor(keys);
         if (wait > 0) {
           res.setHeader('Retry-After', String(wait));
           send(res, 429, { error: 'too many attempts, try again in a minute' });
@@ -394,11 +442,11 @@ const server = http.createServer(async (req, res) => {
           ? await checkPassword(v.password, u.password_hash)
           : await checkPasswordDummy(v.password).then(() => false);
         if (!u || !okLogin) {
-          loginLimiter.fail(keys);
+          await loginLimiter.fail(keys);
           send(res, 401, { error: 'invalid credentials' });
           return;
         }
-        loginLimiter.success(keys[1]);
+        await loginLimiter.success(keys[1]);
         const token = mintSession(u.id, u.session_version, SESSION_SECRET);
         res.writeHead(200, {
           'Content-Type': 'application/json',

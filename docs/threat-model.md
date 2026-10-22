@@ -134,7 +134,8 @@ step for write tools in chat. The audit log records every call.
   revocable. Passwords use bcrypt. A dummy hash is checked for unknown names, so login time does
   not reveal which names exist.
 - **Login hardening (bug 6).**
-  - Rate limit: 5 failures per 15 min per client IP or user name gives a 1-min lock (429).
+  - Rate limit: 5 failures per 15 min per client IP or user name gives a 1-min lock (429),
+    counted in Postgres so it holds across gateway replicas.
   - Session cookie: HttpOnly, SameSite=Lax, `Secure` in prod; session writes need
     `Content-Type: application/json` (CSRF).
   - Logout invalidation through `session_version`.
@@ -159,8 +160,10 @@ step for write tools in chat. The audit log records every call.
 
 - **No egress default-deny (D25).** The chat agent needs LLM, DNS, Postgres and upstream
   egress, so only ingress is default-denied per namespace. An egress allow-list is the next step.
-- **No per-key rate limit on `/mcp` or chat.** One member can use up the shared LLM quota or
-  load the store. Only login attempts are rate-limited.
+- **Rate limits are per minute, not per cost.** `/mcp` allows 120 requests a minute per key and
+  chat 20 messages a minute per user (Helm values), counted in Postgres across replicas, with a
+  429 and a `rate_limited` audit row. A member can still spend their whole budget on expensive
+  calls; budgets by cost or by tool are the next step.
 - **Prompt injection via tool results or descriptions (R14)** is reduced (caps, the change
   flag, plain-text rendering, argument validation, no write tools for members) but not prevented.
   A suspected incident is handled by disabling the server, then reviewing its audit rows.

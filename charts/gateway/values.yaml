@@ -27,7 +27,7 @@ imagePullSecrets: []
 images:
   postgres: "postgres:17"
   gateway: "gateway"
-gatewayTag: "0.4.20"
+gatewayTag: "0.4.21"
 
 storage:
   postgres: 5Gi
@@ -36,6 +36,15 @@ storage:
 # Timezone for chat's "today" (prompt date and list_orders after/before). Must equal the
 # store chart's `timezone`, since WooCommerce reads after/before in site-local time.
 storeTimezone: "UTC"
+
+# Gateway pods. More than 1 is safe: requests are stateless (D6), and rate limits, login locks
+# and migrations coordinate through Postgres.
+replicas: 1
+
+# Per-minute budgets, counted in Postgres so they hold across replicas; 0 disables.
+rateLimit:
+  mcpPerMinute: 120 # per API key on /mcp
+  chatPerMinute: 20 # per user on the dashboard chat
 
 session:
   # Adds Secure to the session cookie. Keep false over plain http (kind, k3d):

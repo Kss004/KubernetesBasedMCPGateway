@@ -13,7 +13,8 @@ kind: Deployment
 metadata:
   name: {{ .Release.Name }}-gateway
 spec:
-  replicas: 1
+  # Any replica serves any request (D6); limits and login locks are counted in Postgres.
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: gateway
@@ -58,6 +59,10 @@ spec:
               value: {{ .Values.storeTimezone | quote }}
             - name: COOKIE_SECURE
               value: {{ .Values.session.cookieSecure | quote }}
+            - name: RATE_MCP_PER_MINUTE
+              value: {{ .Values.rateLimit.mcpPerMinute | quote }}
+            - name: RATE_CHAT_PER_MINUTE
+              value: {{ .Values.rateLimit.chatPerMinute | quote }}
             # P6 chat LLM (D10): base URL + pinned model are values (not secrets);
             # the key arrives out-of-band via `make secrets` (optional so the
             # gateway still boots without it; /api/chat then answers 503).

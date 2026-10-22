@@ -99,23 +99,26 @@ at gateway 0.4.2 (2026-10-18), and the current build (0.4.14) on 2026-10-20. The
 bugs, 4 of which kind hid; see `docs/notes/P4-k3d.md`. The same charts now run on a real k3s VPS
 with Let's Encrypt TLS; that run found 4 more problems (`docs/notes/P5-vps.md`).
 
-### Replicas: why one gateway pod, and what a second one needs
+### Replicas: two gateway pods
 
-The gateway runs `replicas: 1`. The request path is already replica-safe: `/mcp` and chat hold no
-session (D6), dashboard sessions are signed cookies checked against `session_version` in
-Postgres, and servers, keys and audit all live in Postgres. Two things are per pod, in memory:
-- **Login limiter** (5 failures per name or IP, then a 60s lock). With N pods behind round-robin
-  an attacker gets up to 5×N tries per window. Fix: keep the counters in Postgres (or Redis).
-- **LLM fallback cool-down.** Each pod finds out on its own that the primary model is down.
-  Harmless, only a few extra failed calls.
+Production runs `replicas: 2` with a PodDisruptionBudget (`minAvailable: 1`); local stays at 1.
+The request path holds no state: `/mcp` and chat keep no MCP session (D6), dashboard sessions are
+signed cookies checked against `session_version` in Postgres, and servers, keys and audit live in
+Postgres. What had to change for a second pod:
+- **Rate limits and the login lock** are counted in Postgres (`ratelimit.ts`, tables
+  `rate_counters` and `login_limits`), with one atomic upsert per hit, so a client gets the same
+  budget whichever pod answers. In memory, N pods would have meant N times the budget.
+- **Server changes reach every pod at once.** The pod that handles an add, edit, disable or remove
+  sends `NOTIFY servers_changed`; every pod `LISTEN`s and refreshes its health and tool cache, so
+  a disabled server's tools disappear everywhere within about a second.
+- **Startup migrations** take a Postgres advisory lock, so pods starting together migrate one at
+  a time.
 
-Health status, tool lists and the `[description changed]` flag are also per pod, but each pod
-rebuilds them from Postgres and its own probes within seconds, so they converge. Startup
-migrations run per version inside a transaction; if two pods race on a fresh database the loser
-fails on the version row and its retry loop finds it applied (a Postgres advisory lock would make
-that explicit). So `replicas: 2` works today with a weaker lockout; the limiter is the one change
-to make before scaling out. Postgres itself is a single StatefulSet pod (D4), the real
-single point of failure.
+Still per pod, by design: health probes and the tool cache (each pod probes on its own and
+converges within seconds), the `[description changed]` flag, and the LLM fallback cool-down
+(each pod finds out on its own that the primary model is down; a few extra failed calls).
+Checked live (`P5-vps.md`): deleting one of the two pods during a stream of requests failed none
+of 60. Postgres itself is a single StatefulSet pod (D4), the remaining single point of failure.
 
 ## Decisions log
 

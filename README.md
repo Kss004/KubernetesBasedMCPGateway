@@ -302,14 +302,12 @@ helm rollback gateway <revision> -n urumi-gateway --wait --timeout 3m
 |---|---|
 | Production-like deployment (live on a k3s VPS with Let's Encrypt TLS via cert-manager; rehearsed on k3d first) | section 7, `docs/notes/P5-vps.md`, `docs/notes/P4-k3d.md`, `charts/*/values-prod.yaml` |
 | Tool permissions (members cannot see or call write tools or the failure-demo tools) | `apps/gateway/src/router.ts` (`grantsAllow`), applied in `/mcp` and in chat |
-| Security hardening: SSRF guard on server URLs, credentials encrypted at rest (AES-256-GCM), default-deny ingress NetworkPolicies with an enforcement test, non-root containers where the image allows, no service-account tokens, least-privilege RBAC for the bootstrap Job, CSP and security headers, login rate limit, logout invalidation | `apps/gateway/src/egress.ts` (SSRF guard: in-cluster Services or public https hosts, IPs checked at save and on every connection), `crypto.ts`, `session.ts`, the `NetworkPolicy` objects in `charts/*/templates/`, `charts/store/templates/bootstrap.yaml` (Role), `scripts/test-netpol.sh` |
+| Security hardening: SSRF guard on server URLs, credentials encrypted at rest (AES-256-GCM), default-deny ingress NetworkPolicies with an enforcement test, non-root containers where the image allows, no service-account tokens, least-privilege RBAC for the bootstrap Job, CSP and security headers, login rate limit, logout invalidation | `apps/gateway/src/egress.ts` (SSRF guard: in-cluster Services or public https hosts, IPs checked at save and on every connection), `crypto.ts`, `session.ts`, `ratelimit.ts`, the `NetworkPolicy` objects in `charts/*/templates/`, `charts/store/templates/bootstrap.yaml` (Role), `scripts/test-netpol.sh` |
 | Upgrades and rollback | section 8, `docs/notes/P4-k3d.md` |
-| Observability (partial): clear Unreachable status with fast detection (about 10s), error classes in the audit, failover and failure log lines | `apps/gateway/src/pool.ts`, `audit.ts`, `chat.ts` |
-| Rate limits (partial): login attempts per IP and user name | `apps/gateway/src/session.ts` (`LoginLimiter`) |
+| Observability: per-server calls, error rate, p50/p95 latency and error classes (Servers page, `/api/metrics`, Prometheus `/metrics`); why an upstream is Unreachable and since when | `apps/gateway/src/metrics.ts`, `pool.ts` (`describeFailure`), `apps/dashboard/src/Servers.jsx` |
+| Scaling: 2 gateway replicas in production with a PodDisruptionBudget; rate limits per key on `/mcp` and per user on chat; login lock, limits and migrations coordinated through Postgres; server changes pushed to every pod (LISTEN/NOTIFY) | `apps/gateway/src/ratelimit.ts`, `db.ts`, `index.ts`, `charts/gateway/templates/pdb.yaml`, `docs/design-tradeoffs.md` "Replicas" |
 | LLM resilience: automatic provider fallback | `apps/gateway/src/chat.ts` (`makeLlmCaller`) |
 | Chat correctness guard: no store data shown without a tool call in that request | `apps/gateway/src/chat.ts` (`driveLoop`), D28 |
 
-Not attempted: multi-store provisioning, OAuth on the gateway, many-tools search, hosted MCP
-servers, and multi-replica scaling. The gateway is stateless per request (D6); the limiter and
-fallback cool-down are per pod (what a second replica needs: `docs/design-tradeoffs.md`,
-"Replicas").
+Not attempted: multi-store provisioning, OAuth on the gateway, many-tools search and hosted MCP
+servers.
